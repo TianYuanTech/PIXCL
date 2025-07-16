@@ -56,6 +56,7 @@ import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.upgrade.IntegrityChecker;
+import org.jackhuang.hmcl.auth.AuthorizationChecker;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.gson.UUIDTypeAdapter;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
@@ -258,6 +259,26 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         Object additionalData;
         if (detailsPane instanceof AccountDetailsInputPane) {
             AccountDetailsInputPane details = (AccountDetailsInputPane) detailsPane;
+
+            if (accountMode == AccountMode.CARD_KEY) {
+                if (AuthorizationChecker.checkCardAuthorization(details.getCardKey())) {
+                    System.out.println("return cardKey success");
+                } else {
+                    System.out.println("return cardKey failed");
+                    body.setDisable(false);
+                    spinner.hideSpinner();
+                    return;
+                }
+            } else {
+                if (AuthorizationChecker.checkWebcastAuthorization(details.getPlatform(), details.getRoomNumber())) {
+                    System.out.println("return room success");
+                } else {
+                    System.out.println("return room failed");
+                    body.setDisable(false);
+                    spinner.hideSpinner();
+                    return;
+                }
+            }
             username = details.getUsername();
             password = details.getPassword();
             additionalData = details.getAdditionalData();
@@ -266,6 +287,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             password = null;
             additionalData = null;
         }
+
 
         Runnable doCreate = () -> {
             logging.set(true);
@@ -478,12 +500,14 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                         rowIndex++;
 
                         // 直播房间号输入框
-                        Label lblRoomNumber = new Label("直播房间号");
+                        Label lblRoomNumber = new Label("直播间号");
                         setHalignment(lblRoomNumber, HPos.LEFT);
                         add(lblRoomNumber, 0, rowIndex);
 
                         txtRoomNumber = new JFXTextField();
-                        txtRoomNumber.setPromptText("请输入直播房间号");
+                        txtRoomNumber.setPromptText("请输入直播间号");
+                        txtRoomNumber.setValidators(new RequiredValidator());
+                        setValidateWhileTextChanged(txtRoomNumber, true);
                         txtRoomNumber.setOnAction(e -> onAction.run());
                         add(txtRoomNumber, 1, rowIndex);
                         rowIndex++;
@@ -583,6 +607,8 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                     if (txtUUID != null && !txtUUID.validate())
                         return false;
                     if (txtCardKey != null && !txtCardKey.validate())
+                        return false;
+                    if (txtRoomNumber != null && !txtRoomNumber.validate())
                         return false;
                     return true;
                 }
