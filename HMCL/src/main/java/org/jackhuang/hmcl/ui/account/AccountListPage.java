@@ -60,6 +60,8 @@ import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.createSelectedItemPropertyFor;
 
 public final class AccountListPage extends DecoratorAnimatedPage implements DecoratorPage {
+    // 注释掉区域限制相关代码
+    /*
     static final BooleanProperty RESTRICTED = new SimpleBooleanProperty(true);
 
     private static boolean isExemptedRegion() {
@@ -106,6 +108,7 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                 }
             });
     }
+    */
 
     private final ObservableList<AccountListItem> items;
     private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>(State.fromTitle(i18n("account.manage")));
@@ -142,8 +145,11 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
 
     private static class AccountListPageSkin extends DecoratorAnimatedPageSkin<AccountListPage> {
 
+        // 注释掉第三方认证服务器相关代码
+        /*
         private final ObservableList<AdvancedListItem> authServerItems;
         private ChangeListener<Boolean> holder;
+        */
 
         public AccountListPageSkin(AccountListPage skinnable) {
             super(skinnable);
@@ -154,13 +160,17 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                     boxMethods.getStyleClass().add("advanced-list-box-content");
                     FXUtils.setLimitWidth(boxMethods, 200);
 
+                    // 注释掉微软账户选项
+                    /*
                     AdvancedListItem microsoftItem = new AdvancedListItem();
                     microsoftItem.getStyleClass().add("navigation-drawer-item");
                     microsoftItem.setActionButtonVisible(false);
                     microsoftItem.setTitle(i18n("account.methods.microsoft"));
                     microsoftItem.setLeftGraphic(wrap(SVG.MICROSOFT));
                     microsoftItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_MICROSOFT)));
+                    */
 
+                    // 保留离线账户选项
                     AdvancedListItem offlineItem = new AdvancedListItem();
                     offlineItem.getStyleClass().add("navigation-drawer-item");
                     offlineItem.setActionButtonVisible(false);
@@ -168,6 +178,8 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                     offlineItem.setLeftGraphic(wrap(SVG.PERSON));
                     offlineItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_OFFLINE)));
 
+                    // 注释掉第三方认证服务器相关代码
+                    /*
                     VBox boxAuthServers = new VBox();
                     authServerItems = MappedObservableList.create(skinnable.authServersProperty(), server -> {
                         AdvancedListItem item = new AdvancedListItem();
@@ -202,8 +214,12 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                         return item;
                     });
                     Bindings.bindContent(boxAuthServers.getChildren(), authServerItems);
+                    */
 
                     ClassTitle title = new ClassTitle(i18n("account.create").toUpperCase(Locale.ROOT));
+
+                    // 注释掉区域限制相关的UI逻辑
+                    /*
                     if (RESTRICTED.get()) {
                         VBox wrapper = new VBox(offlineItem, boxAuthServers);
                         wrapper.setPadding(Insets.EMPTY);
@@ -225,8 +241,14 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                     } else {
                         boxMethods.getChildren().setAll(title, microsoftItem, offlineItem, boxAuthServers);
                     }
+                    */
+
+                    // 简化后的UI - 只包含标题和离线账户选项
+                    boxMethods.getChildren().setAll(title, offlineItem);
                 }
 
+                // 注释掉添加认证服务器的选项
+                /*
                 AdvancedListItem addAuthServerItem = new AdvancedListItem();
                 {
                     addAuthServerItem.getStyleClass().add("navigation-drawer-item");
@@ -237,10 +259,12 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                     addAuthServerItem.setOnAction(e -> Controllers.dialog(new AddAuthlibInjectorServerPane()));
                     VBox.setMargin(addAuthServerItem, new Insets(0, 0, 12, 0));
                 }
+                */
 
                 ScrollPane scrollPane = new ScrollPane(boxMethods);
                 VBox.setVgrow(scrollPane, Priority.ALWAYS);
-                setLeft(scrollPane, addAuthServerItem);
+                // 修改后只传递左侧主要内容，不包含添加认证服务器项
+                setLeft(scrollPane);
             }
 
             ScrollPane scrollPane = new ScrollPane();

@@ -112,6 +112,8 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
 
     public CreateAccountPane(AccountFactory<?> factory) {
         if (factory == null) {
+            // 注释掉区域限制相关逻辑，强制使用离线账户
+            /*
             if (AccountListPage.RESTRICTED.get()) {
                 showMethodSwitcher = false;
                 factory = Accounts.FACTORY_MICROSOFT;
@@ -124,6 +126,11 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                     factory = Accounts.FACTORY_OFFLINE;
                 }
             }
+            */
+
+            // 简化逻辑：直接使用离线账户，不显示方法切换器
+            showMethodSwitcher = false;
+            factory = Accounts.FACTORY_OFFLINE;
         } else {
             showMethodSwitcher = false;
         }
@@ -163,6 +170,8 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             setActions(lblErrorMessage, hbox);
         }
 
+        // 注释掉方法切换器相关逻辑，因为现在只支持离线账户
+        /*
         if (showMethodSwitcher) {
             TabControl.Tab<?>[] tabs = new TabControl.Tab[Accounts.FACTORIES.size()];
             TabControl.Tab<?> selected = null;
@@ -204,22 +213,38 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             body = detailsContainer;
             setBody(body);
         }
+        */
+
+        // 简化后的UI - 只有详情容器
+        detailsContainer = new StackPane();
+        detailsContainer.setPadding(new Insets(10, 0, 0, 0));
+        body = detailsContainer;
+        setBody(body);
+
         initDetailsPane();
 
         setPrefWidth(560);
     }
 
     public CreateAccountPane(AuthlibInjectorServer authServer) {
-        this(Accounts.getAccountFactoryByAuthlibInjectorServer(authServer));
+        // 注释掉第三方认证服务器支持，强制使用离线账户
+        // this(Accounts.getAccountFactoryByAuthlibInjectorServer(authServer));
+        this(Accounts.FACTORY_OFFLINE);
     }
 
     private void onAccept() {
         spinner.showSpinner();
         lblErrorMessage.setText("");
 
+        // 注释掉微软账户相关逻辑
+        /*
         if (!(factory instanceof MicrosoftAccountFactory)) {
             body.setDisable(true);
         }
+        */
+
+        // 简化：直接禁用body
+        body.setDisable(true);
 
         String username;
         String password;
@@ -313,6 +338,9 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             detailsContainer.getChildren().remove(detailsPane);
             lblErrorMessage.setText("");
         }
+
+        // 注释掉微软账户相关逻辑
+        /*
         if (factory == Accounts.FACTORY_MICROSOFT) {
             VBox vbox = new VBox(8);
             if (!Accounts.OAUTH_CALLBACK.getClientId().isEmpty()) {
@@ -378,11 +406,19 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             detailsPane = new AccountDetailsInputPane(factory, btnAccept::fire);
             btnAccept.disableProperty().bind(((AccountDetailsInputPane) detailsPane).validProperty().not());
         }
+        */
+
+        // 简化后的逻辑：只支持离线账户
+        detailsPane = new AccountDetailsInputPane(factory, btnAccept::fire);
+        btnAccept.disableProperty().bind(((AccountDetailsInputPane) detailsPane).validProperty().not());
+
         detailsContainer.getChildren().add(detailsPane);
     }
 
     private static class AccountDetailsInputPane extends GridPane {
 
+        // 注释掉第三方认证服务器相关代码
+        /*
         // ==== authlib-injector hyperlinks ====
         private static final String[] ALLOWED_LINKS = {"homepage", "register"};
 
@@ -405,13 +441,19 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             return unmodifiableList(result);
         }
         // =====
+        */
 
         private final AccountFactory<?> factory;
+        // 注释掉第三方认证服务器相关字段
+        /*
         private @Nullable AuthlibInjectorServer server;
         private @Nullable JFXComboBox<AuthlibInjectorServer> cboServers;
+        */
         private @Nullable JFXTextField txtUsername;
         private @Nullable JFXPasswordField txtPassword;
         private @Nullable JFXTextField txtUUID;
+        private @Nullable JFXComboBox<String> cboPlatform;
+        private @Nullable JFXTextField txtRoomNumber;
         private final BooleanBinding valid;
 
         public AccountDetailsInputPane(AccountFactory<?> factory, Runnable onAction) {
@@ -439,6 +481,8 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 rowIndex++;
             }
 
+            // 注释掉第三方认证服务器相关UI
+            /*
             if (factory instanceof BoundAuthlibInjectorAccountFactory) {
                 this.server = ((BoundAuthlibInjectorAccountFactory) factory).getServer();
 
@@ -501,6 +545,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
 
                 rowIndex++;
             }
+            */
 
             if (factory.getLoginType().requiresUsername) {
                 Label lblUsername = new Label(i18n("account.username"));
@@ -522,6 +567,33 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 add(txtUsername, 1, rowIndex);
 
                 rowIndex++;
+
+                // 添加直播平台选择器
+                if (factory instanceof OfflineAccountFactory) {
+                    Label lblPlatform = new Label("直播平台");
+                    setHalignment(lblPlatform, HPos.LEFT);
+                    add(lblPlatform, 0, rowIndex);
+
+                    cboPlatform = new JFXComboBox<>();
+                    cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
+                    cboPlatform.setPromptText("请选择直播平台");
+                    cboPlatform.setMaxWidth(Double.MAX_VALUE);
+                    add(cboPlatform, 1, rowIndex);
+
+                    rowIndex++;
+
+                    // 添加直播房间号输入框
+                    Label lblRoomNumber = new Label("直播房间号");
+                    setHalignment(lblRoomNumber, HPos.LEFT);
+                    add(lblRoomNumber, 0, rowIndex);
+
+                    txtRoomNumber = new JFXTextField();
+                    txtRoomNumber.setPromptText("请输入直播房间号");
+                    txtRoomNumber.setOnAction(e -> onAction.run());
+                    add(txtRoomNumber, 1, rowIndex);
+
+                    rowIndex++;
+                }
             }
 
             if (factory.getLoginType().requiresPassword) {
@@ -542,11 +614,11 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 txtUsername.setPromptText(i18n("account.methods.offline.name.special_characters"));
                 FXUtils.installFastTooltip(txtUsername, i18n("account.methods.offline.name.special_characters"));
 
-                JFXHyperlink purchaseLink = new JFXHyperlink(i18n("account.methods.microsoft.purchase"));
-                purchaseLink.setExternalLink(YggdrasilService.PURCHASE_URL);
-                HBox linkPane = new HBox(purchaseLink);
-                GridPane.setColumnSpan(linkPane, 2);
-                add(linkPane, 0, rowIndex);
+//                JFXHyperlink purchaseLink = new JFXHyperlink(i18n("account.methods.microsoft.purchase"));
+//                purchaseLink.setExternalLink(YggdrasilService.PURCHASE_URL);
+//                HBox linkPane = new HBox(purchaseLink);
+//                GridPane.setColumnSpan(linkPane, 2);
+//                add(linkPane, 0, rowIndex);
 
                 rowIndex++;
 
@@ -587,20 +659,30 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
 
             valid = new BooleanBinding() {
                 {
+                    // 注释掉第三方认证服务器相关绑定
+                    /*
                     if (cboServers != null)
                         bind(cboServers.valueProperty());
+                    */
                     if (txtUsername != null)
                         bind(txtUsername.textProperty());
                     if (txtPassword != null)
                         bind(txtPassword.textProperty());
                     if (txtUUID != null)
                         bind(txtUUID.textProperty());
+                    if (cboPlatform != null)
+                        bind(cboPlatform.valueProperty());
+                    if (txtRoomNumber != null)
+                        bind(txtRoomNumber.textProperty());
                 }
 
                 @Override
                 protected boolean computeValue() {
+                    // 注释掉第三方认证服务器相关验证
+                    /*
                     if (cboServers != null && cboServers.getValue() == null)
                         return false;
+                    */
                     if (txtUsername != null && !txtUsername.validate())
                         return false;
                     if (txtPassword != null && !txtPassword.validate())
@@ -613,13 +695,18 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
 
         private boolean requiresEmailAsUsername() {
+            // 注释掉第三方认证服务器相关逻辑
+            /*
             if ((factory instanceof AuthlibInjectorAccountFactory) && this.server != null) {
                 return !server.isNonEmailLogin();
             }
+            */
             return false;
         }
 
         public Object getAdditionalData() {
+            // 注释掉第三方认证服务器相关逻辑
+            /*
             if (factory instanceof AuthlibInjectorAccountFactory) {
                 return getAuthServer();
             } else if (factory instanceof OfflineAccountFactory) {
@@ -628,11 +715,45 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             } else {
                 return null;
             }
+            */
+
+            // 简化后的逻辑：只支持离线账户
+            if (factory instanceof OfflineAccountFactory) {
+                UUID uuid = txtUUID == null ? null : StringUtils.isBlank(txtUUID.getText()) ? null : UUIDTypeAdapter.fromString(txtUUID.getText());
+
+                // 创建包含直播平台和房间号信息的数据对象
+                String platform = cboPlatform == null ? null : cboPlatform.getValue();
+                String roomNumber = txtRoomNumber == null ? null : txtRoomNumber.getText();
+
+                // 将直播信息存储在一个Map中，作为额外的数据传递
+                java.util.Map<String, Object> streamInfo = new java.util.HashMap<>();
+                if (platform != null && !platform.isEmpty()) {
+                    streamInfo.put("platform", platform);
+                }
+                if (roomNumber != null && !roomNumber.trim().isEmpty()) {
+                    streamInfo.put("roomNumber", roomNumber.trim());
+                }
+
+                return new OfflineAccountFactory.AdditionalData(uuid,null);
+            } else {
+                return null;
+            }
         }
 
+        public @Nullable String getPlatform() {
+            return cboPlatform == null ? null : cboPlatform.getValue();
+        }
+
+        public @Nullable String getRoomNumber() {
+            return txtRoomNumber == null ? null : txtRoomNumber.getText();
+        }
+
+        // 注释掉第三方认证服务器相关方法
+        /*
         public @Nullable AuthlibInjectorServer getAuthServer() {
             return this.server;
         }
+        */
 
         public @Nullable String getUsername() {
             return txtUsername == null ? null : txtUsername.getText();
