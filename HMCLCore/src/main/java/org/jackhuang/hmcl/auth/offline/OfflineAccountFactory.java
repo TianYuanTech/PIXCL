@@ -29,41 +29,82 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.jackhuang.hmcl.util.Lang.tryCast;
 
 /**
- *
- * @author huangyuhui
+ * @description: 离线账户工厂类，负责创建和管理离线账户
  */
 public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> {
+
+    /**
+     * @description: authlib注入器组件下载器
+     */
     private final AuthlibInjectorArtifactProvider downloader;
 
+    /**
+     * @description: 构造函数
+     * @param downloader authlib注入器组件下载器
+     */
     public OfflineAccountFactory(AuthlibInjectorArtifactProvider downloader) {
         this.downloader = downloader;
     }
 
+    /**
+     * @description: 获取登录类型
+     * @return AccountLoginType 登录类型
+     */
     @Override
     public AccountLoginType getLoginType() {
         return AccountLoginType.USERNAME;
     }
 
+    /**
+     * @description: 创建离线账户
+     * @param username 用户名
+     * @param uuid 用户UUID
+     * @return OfflineAccount 离线账户实例
+     */
     public OfflineAccount create(String username, UUID uuid) {
         return new OfflineAccount(downloader, username, uuid, null);
     }
 
+    /**
+     * @description: 创建离线账户
+     * @param selector 角色选择器
+     * @param username 用户名
+     * @param password 密码
+     * @param progressCallback 进度回调
+     * @param additionalData 附加数据
+     * @return OfflineAccount 离线账户实例
+     */
     @Override
     public OfflineAccount create(CharacterSelector selector, String username, String password, ProgressCallback progressCallback, Object additionalData) {
         AdditionalData data;
         UUID uuid;
         Skin skin;
+        String liveType = null;
+        String liveRoom = null;
+        String cardKey = null;
+        String accountMode = null;
+
         if (additionalData != null) {
             data = (AdditionalData) additionalData;
             uuid = data.uuid == null ? getUUIDFromUserName(username) : data.uuid;
             skin = data.skin;
+            liveType = data.liveType;
+            liveRoom = data.liveRoom;
+            cardKey = data.cardKey;
+            accountMode = data.accountMode;
         } else {
             uuid = getUUIDFromUserName(username);
             skin = null;
         }
-        return new OfflineAccount(downloader, username, uuid, skin);
+
+        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRoom, cardKey, accountMode);
     }
 
+    /**
+     * @description: 从存储数据创建离线账户
+     * @param storage 存储数据映射
+     * @return OfflineAccount 离线账户实例
+     */
     @Override
     public OfflineAccount fromStorage(Map<Object, Object> storage) {
         String username = tryCast(storage.get("username"), String.class)
@@ -73,21 +114,115 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
                 .orElse(getUUIDFromUserName(username));
         Skin skin = Skin.fromStorage(tryCast(storage.get("skin"), Map.class).orElse(null));
 
-        return new OfflineAccount(downloader, username, uuid, skin);
+        // 读取新增的字段
+        String liveType = tryCast(storage.get("liveType"), String.class).orElse(null);
+        String liveRoom = tryCast(storage.get("liveRoom"), String.class).orElse(null);
+        String cardKey = tryCast(storage.get("cardKey"), String.class).orElse(null);
+        String accountMode = tryCast(storage.get("accountMode"), String.class).orElse(null);
+
+        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRoom, cardKey, accountMode);
     }
 
+    /**
+     * @description: 根据用户名生成UUID
+     * @param username 用户名
+     * @return UUID 生成的UUID
+     */
     public static UUID getUUIDFromUserName(String username) {
         return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(UTF_8));
     }
 
+    /**
+     * @description: 附加数据类，用于传递额外的账户信息
+     */
     public static class AdditionalData {
+        /**
+         * @description: 用户UUID
+         */
         private final UUID uuid;
+
+        /**
+         * @description: 皮肤信息
+         */
         private final Skin skin;
 
+        /**
+         * @description: 直播类型
+         */
+        private final String liveType;
+
+        /**
+         * @description: 直播房间号
+         */
+        private final String liveRoom;
+
+        /**
+         * @description: 卡密
+         */
+        private final String cardKey;
+
+        /**
+         * @description: 账户模式
+         */
+        private final String accountMode;
+
+        /**
+         * @description: 简单构造函数
+         * @param uuid 用户UUID
+         * @param skin 皮肤信息
+         */
         public AdditionalData(UUID uuid, Skin skin) {
+            this(uuid, skin, null, null, null, null);
+        }
+
+        /**
+         * @description: 完整构造函数
+         * @param uuid 用户UUID
+         * @param skin 皮肤信息
+         * @param liveType 直播类型
+         * @param liveRoom 直播房间号
+         * @param cardKey 卡密
+         * @param accountMode 账户模式
+         */
+        public AdditionalData(UUID uuid, Skin skin, String liveType, String liveRoom, String cardKey, String accountMode) {
             this.uuid = uuid;
             this.skin = skin;
+            this.liveType = liveType;
+            this.liveRoom = liveRoom;
+            this.cardKey = cardKey;
+            this.accountMode = accountMode;
+        }
+
+        /**
+         * @description: 获取直播类型
+         * @return String 直播类型
+         */
+        public String getLiveType() {
+            return liveType;
+        }
+
+        /**
+         * @description: 获取直播房间号
+         * @return String 直播房间号
+         */
+        public String getLiveRoom() {
+            return liveRoom;
+        }
+
+        /**
+         * @description: 获取卡密
+         * @return String 卡密
+         */
+        public String getCardKey() {
+            return cardKey;
+        }
+
+        /**
+         * @description: 获取账户模式
+         * @return String 账户模式
+         */
+        public String getAccountMode() {
+            return accountMode;
         }
     }
-
 }

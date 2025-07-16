@@ -59,214 +59,133 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.createSelectedItemPropertyFor;
 
+/**
+ * @description: 账户列表页面，管理游戏账户的创建和选择
+ */
 public final class AccountListPage extends DecoratorAnimatedPage implements DecoratorPage {
-    // 注释掉区域限制相关代码
-    /*
-    static final BooleanProperty RESTRICTED = new SimpleBooleanProperty(true);
 
-    private static boolean isExemptedRegion() {
-        String zoneId = ZoneId.systemDefault().getId();
-        if (Arrays.asList(
-                "Asia/Shanghai",
-                // Although Asia/Beijing is not a legal name, Deepin uses it
-                "Asia/Beijing",
-                "Asia/Chongqing",
-                "Asia/Chungking",
-                "Asia/Harbin"
-        ).contains(zoneId))
-            return true;
-
-        if (OperatingSystem.CURRENT_OS == OperatingSystem.WINDOWS && NativeUtils.USE_JNA) {
-            Kernel32 kernel32 = Kernel32.INSTANCE;
-
-            // https://learn.microsoft.com/windows/win32/intl/table-of-geographical-locations
-            if (kernel32 != null && kernel32.GetUserGeoID(WinConstants.GEOCLASS_NATION) == 45) // China
-                return true;
-        } else if (OperatingSystem.CURRENT_OS == OperatingSystem.LINUX && "GMT+08:00".equals(zoneId))
-            // Some Linux distributions may use invalid time zone ids (e.g., Asia/Beijing)
-            // Java may not be able to resolve this name and use GMT+08:00 instead.
-            return true;
-
-        return false;
-    }
-
-    static {
-        String property = System.getProperty("hmcl.offline.auth.restricted", "auto");
-
-        if ("false".equals(property)
-                || "auto".equals(property) && isExemptedRegion()
-                || globalConfig().isEnableOfflineAccount())
-            RESTRICTED.set(false);
-        else
-            globalConfig().enableOfflineAccountProperty().addListener(new ChangeListener<Boolean>() {
-                @Override
-                public void changed(ObservableValue<? extends Boolean> o, Boolean oldValue, Boolean newValue) {
-                    if (newValue) {
-                        globalConfig().enableOfflineAccountProperty().removeListener(this);
-                        RESTRICTED.set(false);
-                    }
-                }
-            });
-    }
-    */
-
+    /**
+     * @description: 账户列表项的观察列表
+     */
     private final ObservableList<AccountListItem> items;
+
+    /**
+     * @description: 页面状态属性
+     */
     private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>(State.fromTitle(i18n("account.manage")));
+
+    /**
+     * @description: 账户列表属性
+     */
     private final ListProperty<Account> accounts = new SimpleListProperty<>(this, "accounts", FXCollections.observableArrayList());
+
+    /**
+     * @description: 认证服务器列表属性
+     */
     private final ListProperty<AuthlibInjectorServer> authServers = new SimpleListProperty<>(this, "authServers", FXCollections.observableArrayList());
+
+    /**
+     * @description: 当前选中的账户属性
+     */
     private final ObjectProperty<Account> selectedAccount;
 
+    /**
+     * @description: 构造函数，初始化账户列表页面
+     */
     public AccountListPage() {
         items = MappedObservableList.create(accounts, AccountListItem::new);
         selectedAccount = createSelectedItemPropertyFor(items, Account.class);
     }
 
+    /**
+     * @description: 获取选中账户的属性
+     * @return ObjectProperty<Account> 选中账户的属性对象
+     */
     public ObjectProperty<Account> selectedAccountProperty() {
         return selectedAccount;
     }
 
+    /**
+     * @description: 获取账户列表属性
+     * @return ListProperty<Account> 账户列表属性对象
+     */
     public ListProperty<Account> accountsProperty() {
         return accounts;
     }
 
+    /**
+     * @description: 获取页面状态属性
+     * @return ReadOnlyObjectProperty<State> 页面状态属性对象
+     */
     @Override
     public ReadOnlyObjectProperty<State> stateProperty() {
         return state.getReadOnlyProperty();
     }
 
+    /**
+     * @description: 获取认证服务器列表属性
+     * @return ListProperty<AuthlibInjectorServer> 认证服务器列表属性对象
+     */
     public ListProperty<AuthlibInjectorServer> authServersProperty() {
         return authServers;
     }
 
+    /**
+     * @description: 创建默认的皮肤
+     * @return Skin<?> 页面皮肤对象
+     */
     @Override
     protected Skin<?> createDefaultSkin() {
         return new AccountListPageSkin(this);
     }
 
+    /**
+     * @description: 账户列表页面的皮肤实现类
+     */
     private static class AccountListPageSkin extends DecoratorAnimatedPageSkin<AccountListPage> {
 
-        // 注释掉第三方认证服务器相关代码
-        /*
-        private final ObservableList<AdvancedListItem> authServerItems;
-        private ChangeListener<Boolean> holder;
-        */
-
+        /**
+         * @description: 构造函数，创建账户列表页面的皮肤
+         * @param skinnable 可换肤的账户列表页面对象
+         */
         public AccountListPageSkin(AccountListPage skinnable) {
             super(skinnable);
 
+            // 创建左侧方法选择区域
             {
                 VBox boxMethods = new VBox();
                 {
                     boxMethods.getStyleClass().add("advanced-list-box-content");
                     FXUtils.setLimitWidth(boxMethods, 200);
 
-                    // 注释掉微软账户选项
-                    /*
-                    AdvancedListItem microsoftItem = new AdvancedListItem();
-                    microsoftItem.getStyleClass().add("navigation-drawer-item");
-                    microsoftItem.setActionButtonVisible(false);
-                    microsoftItem.setTitle(i18n("account.methods.microsoft"));
-                    microsoftItem.setLeftGraphic(wrap(SVG.MICROSOFT));
-                    microsoftItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_MICROSOFT)));
-                    */
-
-                    // 保留离线账户选项
+                    // 创建离线账户选项
                     AdvancedListItem offlineItem = new AdvancedListItem();
                     offlineItem.getStyleClass().add("navigation-drawer-item");
                     offlineItem.setActionButtonVisible(false);
                     offlineItem.setTitle(i18n("account.methods.offline"));
                     offlineItem.setLeftGraphic(wrap(SVG.PERSON));
-                    offlineItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_OFFLINE)));
+                    offlineItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_OFFLINE, CreateAccountPane.AccountMode.OFFLINE)));
 
-                    // 注释掉第三方认证服务器相关代码
-                    /*
-                    VBox boxAuthServers = new VBox();
-                    authServerItems = MappedObservableList.create(skinnable.authServersProperty(), server -> {
-                        AdvancedListItem item = new AdvancedListItem();
-                        item.getStyleClass().add("navigation-drawer-item");
-                        item.setLeftGraphic(wrap(SVG.DRESSER));
-                        item.setOnAction(e -> Controllers.dialog(new CreateAccountPane(server)));
-
-                        JFXButton btnRemove = new JFXButton();
-                        btnRemove.setOnAction(e -> {
-                            Controllers.confirm(i18n("button.remove.confirm"), i18n("button.remove"), () -> {
-                                skinnable.authServersProperty().remove(server);
-                            }, null);
-                            e.consume();
-                        });
-                        btnRemove.getStyleClass().add("toggle-icon4");
-                        btnRemove.setGraphic(SVG.CLOSE.createIcon(Theme.blackFill(), 14));
-                        item.setRightGraphic(btnRemove);
-
-                        ObservableValue<String> title = BindingMapping.of(server, AuthlibInjectorServer::getName);
-                        item.titleProperty().bind(title);
-                        String host = "";
-                        try {
-                            host = URI.create(server.getUrl()).getHost();
-                        } catch (IllegalArgumentException e) {
-                            LOG.warning("Unparsable authlib-injector server url " + server.getUrl(), e);
-                        }
-                        item.subtitleProperty().set(host);
-                        Tooltip tooltip = new Tooltip();
-                        tooltip.textProperty().bind(Bindings.format("%s (%s)", title, server.getUrl()));
-                        FXUtils.installFastTooltip(item, tooltip);
-
-                        return item;
-                    });
-                    Bindings.bindContent(boxAuthServers.getChildren(), authServerItems);
-                    */
+                    // 创建卡密模式选项
+                    AdvancedListItem cardKeyItem = new AdvancedListItem();
+                    cardKeyItem.getStyleClass().add("navigation-drawer-item");
+                    cardKeyItem.setActionButtonVisible(false);
+                    cardKeyItem.setTitle("卡密用户");
+                    cardKeyItem.setLeftGraphic(wrap(SVG.EDIT));
+                    cardKeyItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_OFFLINE, CreateAccountPane.AccountMode.CARD_KEY)));
 
                     ClassTitle title = new ClassTitle(i18n("account.create").toUpperCase(Locale.ROOT));
 
-                    // 注释掉区域限制相关的UI逻辑
-                    /*
-                    if (RESTRICTED.get()) {
-                        VBox wrapper = new VBox(offlineItem, boxAuthServers);
-                        wrapper.setPadding(Insets.EMPTY);
-                        FXUtils.installFastTooltip(wrapper, i18n("account.login.restricted"));
-
-                        offlineItem.setDisable(true);
-                        boxAuthServers.setDisable(true);
-
-                        boxMethods.getChildren().setAll(title, microsoftItem, wrapper);
-
-                        holder = FXUtils.onWeakChange(RESTRICTED, value -> {
-                            if (!value) {
-                                holder = null;
-                                offlineItem.setDisable(false);
-                                boxAuthServers.setDisable(false);
-                                boxMethods.getChildren().setAll(title, microsoftItem, offlineItem, boxAuthServers);
-                            }
-                        });
-                    } else {
-                        boxMethods.getChildren().setAll(title, microsoftItem, offlineItem, boxAuthServers);
-                    }
-                    */
-
-                    // 简化后的UI - 只包含标题和离线账户选项
-                    boxMethods.getChildren().setAll(title, offlineItem);
+                    // 将标题和两个选项添加到方法选择区域
+                    boxMethods.getChildren().setAll(title, offlineItem, cardKeyItem);
                 }
-
-                // 注释掉添加认证服务器的选项
-                /*
-                AdvancedListItem addAuthServerItem = new AdvancedListItem();
-                {
-                    addAuthServerItem.getStyleClass().add("navigation-drawer-item");
-                    addAuthServerItem.setTitle(i18n("account.injector.add"));
-                    addAuthServerItem.setSubtitle(i18n("account.methods.authlib_injector"));
-                    addAuthServerItem.setActionButtonVisible(false);
-                    addAuthServerItem.setLeftGraphic(wrap(SVG.ADD_CIRCLE));
-                    addAuthServerItem.setOnAction(e -> Controllers.dialog(new AddAuthlibInjectorServerPane()));
-                    VBox.setMargin(addAuthServerItem, new Insets(0, 0, 12, 0));
-                }
-                */
 
                 ScrollPane scrollPane = new ScrollPane(boxMethods);
                 VBox.setVgrow(scrollPane, Priority.ALWAYS);
-                // 修改后只传递左侧主要内容，不包含添加认证服务器项
                 setLeft(scrollPane);
             }
 
+            // 创建右侧账户列表区域
             ScrollPane scrollPane = new ScrollPane();
             VBox list = new VBox();
             {

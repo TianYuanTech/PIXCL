@@ -34,33 +34,25 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
-import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.*;
-
 import javafx.util.Duration;
-import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.AccountFactory;
 import org.jackhuang.hmcl.auth.CharacterSelector;
 import org.jackhuang.hmcl.auth.NoSelectedCharacterException;
-import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccountFactory;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorServer;
-import org.jackhuang.hmcl.auth.authlibinjector.BoundAuthlibInjectorAccountFactory;
-import org.jackhuang.hmcl.auth.microsoft.MicrosoftAccountFactory;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
 import org.jackhuang.hmcl.auth.yggdrasil.GameProfile;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
 import org.jackhuang.hmcl.game.OAuthServer;
 import org.jackhuang.hmcl.game.TexturesLoader;
 import org.jackhuang.hmcl.setting.Accounts;
-import org.jackhuang.hmcl.setting.Theme;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
-import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.upgrade.IntegrityChecker;
@@ -69,65 +61,119 @@ import org.jackhuang.hmcl.util.gson.UUIDTypeAdapter;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.unmodifiableList;
-import static javafx.beans.binding.Bindings.bindContent;
-import static javafx.beans.binding.Bindings.createBooleanBinding;
-import static org.jackhuang.hmcl.setting.ConfigHolder.config;
-import static org.jackhuang.hmcl.ui.FXUtils.*;
+import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
+import static org.jackhuang.hmcl.ui.FXUtils.setValidateWhileTextChanged;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
-import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.classPropertyFor;
 
+/**
+ * @description: 创建账户面板，支持多种账户类型的创建
+ */
 public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
+
+    /**
+     * @description: 用户名验证正则表达式
+     */
     private static final Pattern USERNAME_CHECKER_PATTERN = Pattern.compile("^[A-Za-z0-9_]+$");
 
-    private boolean showMethodSwitcher;
-    private AccountFactory<?> factory;
-
-    private final Label lblErrorMessage;
-    private final JFXButton btnAccept;
-    private final SpinnerPane spinner;
-    private final Node body;
-
-    private Node detailsPane; // AccountDetailsInputPane for Offline / Mojang / authlib-injector, Label for Microsoft
-    private final Pane detailsContainer;
-
-    private final BooleanProperty logging = new SimpleBooleanProperty();
-    private final ObjectProperty<OAuthServer.GrantDeviceCodeEvent> deviceCode = new SimpleObjectProperty<>();
-    private final WeakListenerHolder holder = new WeakListenerHolder();
-
-    private TaskExecutor loginTask;
-
-    public CreateAccountPane() {
-        this((AccountFactory<?>) null);
+    /**
+     * @description: 账户模式枚举，用于区分不同的账户创建模式
+     */
+    public enum AccountMode {
+        /**
+         * @description: 离线模式
+         */
+        OFFLINE,
+        /**
+         * @description: 卡密模式
+         */
+        CARD_KEY
     }
 
-    public CreateAccountPane(AccountFactory<?> factory) {
-        if (factory == null) {
-            // 注释掉区域限制相关逻辑，强制使用离线账户
-            /*
-            if (AccountListPage.RESTRICTED.get()) {
-                showMethodSwitcher = false;
-                factory = Accounts.FACTORY_MICROSOFT;
-            } else {
-                showMethodSwitcher = true;
-                String preferred = config().getPreferredLoginType();
-                try {
-                    factory = Accounts.getAccountFactory(preferred);
-                } catch (IllegalArgumentException e) {
-                    factory = Accounts.FACTORY_OFFLINE;
-                }
-            }
-            */
+    /**
+     * @description: 是否显示方法切换器
+     */
+    private boolean showMethodSwitcher;
 
+    /**
+     * @description: 账户工厂
+     */
+    private AccountFactory<?> factory;
+
+    /**
+     * @description: 账户模式
+     */
+    private AccountMode accountMode;
+
+    /**
+     * @description: 错误消息标签
+     */
+    private final Label lblErrorMessage;
+
+    /**
+     * @description: 确认按钮
+     */
+    private final JFXButton btnAccept;
+
+    /**
+     * @description: 加载动画面板
+     */
+    private final SpinnerPane spinner;
+
+    /**
+     * @description: 主体内容节点
+     */
+    private final Node body;
+
+    /**
+     * @description: 详情面板节点
+     */
+    private Node detailsPane;
+
+    /**
+     * @description: 详情容器
+     */
+    private final Pane detailsContainer;
+
+    /**
+     * @description: 登录状态属性
+     */
+    private final BooleanProperty logging = new SimpleBooleanProperty();
+
+    /**
+     * @description: 设备代码属性
+     */
+    private final ObjectProperty<OAuthServer.GrantDeviceCodeEvent> deviceCode = new SimpleObjectProperty<>();
+
+    /**
+     * @description: 弱引用监听器持有者
+     */
+    private final WeakListenerHolder holder = new WeakListenerHolder();
+
+    /**
+     * @description: 登录任务执行器
+     */
+    private TaskExecutor loginTask;
+
+    /**
+     * @description: 默认构造函数
+     */
+    public CreateAccountPane() {
+        this((AccountFactory<?>) null, AccountMode.OFFLINE);
+    }
+
+    /**
+     * @description: 构造函数，指定账户工厂和账户模式
+     * @param factory 账户工厂
+     * @param accountMode 账户模式
+     */
+    public CreateAccountPane(AccountFactory<?> factory, AccountMode accountMode) {
+        if (factory == null) {
             // 简化逻辑：直接使用离线账户，不显示方法切换器
             showMethodSwitcher = false;
             factory = Accounts.FACTORY_OFFLINE;
@@ -135,17 +181,24 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             showMethodSwitcher = false;
         }
         this.factory = factory;
+        this.accountMode = accountMode;
 
+        // 设置对话框标题
         {
             String title;
             if (showMethodSwitcher) {
                 title = "account.create";
             } else {
-                title = "account.create." + Accounts.getLoginType(factory);
+                if (accountMode == AccountMode.CARD_KEY) {
+                    title = "卡密模式登录";
+                } else {
+                    title = "account.create." + Accounts.getLoginType(factory);
+                }
             }
             setHeading(new Label(i18n(title)));
         }
 
+        // 创建底部按钮区域
         {
             lblErrorMessage = new Label();
             lblErrorMessage.setWrapText(true);
@@ -170,52 +223,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             setActions(lblErrorMessage, hbox);
         }
 
-        // 注释掉方法切换器相关逻辑，因为现在只支持离线账户
-        /*
-        if (showMethodSwitcher) {
-            TabControl.Tab<?>[] tabs = new TabControl.Tab[Accounts.FACTORIES.size()];
-            TabControl.Tab<?> selected = null;
-            for (int i = 0; i < tabs.length; i++) {
-                AccountFactory<?> f = Accounts.FACTORIES.get(i);
-                tabs[i] = new TabControl.Tab<>(Accounts.getLoginType(f), Accounts.getLocalizedLoginTypeName(f));
-                tabs[i].setUserData(f);
-                if (factory == f) {
-                    selected = tabs[i];
-                }
-            }
-
-            TabHeader tabHeader = new TabHeader(tabs);
-            tabHeader.getStyleClass().add("add-account-tab-header");
-            tabHeader.setMinWidth(USE_PREF_SIZE);
-            tabHeader.setMaxWidth(USE_PREF_SIZE);
-            tabHeader.getSelectionModel().select(selected);
-            onChange(tabHeader.getSelectionModel().selectedItemProperty(),
-                    newItem -> {
-                        if (newItem == null)
-                            return;
-                        AccountFactory<?> newMethod = (AccountFactory<?>) newItem.getUserData();
-                        config().setPreferredLoginType(Accounts.getLoginType(newMethod));
-                        this.factory = newMethod;
-                        initDetailsPane();
-                    });
-
-            detailsContainer = new StackPane();
-            detailsContainer.setPadding(new Insets(15, 0, 0, 0));
-
-            VBox boxBody = new VBox(tabHeader, detailsContainer);
-            boxBody.setAlignment(Pos.CENTER);
-            body = boxBody;
-            setBody(body);
-
-        } else {
-            detailsContainer = new StackPane();
-            detailsContainer.setPadding(new Insets(10, 0, 0, 0));
-            body = detailsContainer;
-            setBody(body);
-        }
-        */
-
-        // 简化后的UI - 只有详情容器
+        // 创建主体内容区域
         detailsContainer = new StackPane();
         detailsContainer.setPadding(new Insets(10, 0, 0, 0));
         body = detailsContainer;
@@ -226,24 +234,23 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         setPrefWidth(560);
     }
 
+    /**
+     * @description: 构造函数，用于第三方认证服务器
+     * @param authServer 认证服务器
+     */
     public CreateAccountPane(AuthlibInjectorServer authServer) {
         // 注释掉第三方认证服务器支持，强制使用离线账户
-        // this(Accounts.getAccountFactoryByAuthlibInjectorServer(authServer));
-        this(Accounts.FACTORY_OFFLINE);
+        this(Accounts.FACTORY_OFFLINE, AccountMode.OFFLINE);
     }
 
+    /**
+     * @description: 处理确认按钮点击事件
+     */
     private void onAccept() {
         spinner.showSpinner();
         lblErrorMessage.setText("");
 
-        // 注释掉微软账户相关逻辑
-        /*
-        if (!(factory instanceof MicrosoftAccountFactory)) {
-            body.setDisable(true);
-        }
-        */
-
-        // 简化：直接禁用body
+        // 禁用主体内容
         body.setDisable(true);
 
         String username;
@@ -270,13 +277,12 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                         if (oldIndex == -1) {
                             Accounts.getAccounts().add(account);
                         } else {
-                            // adding an already-added account
-                            // instead of discarding the new account, we first remove the existing one then add the new one
+                            // 如果账户已存在，先删除旧账户再添加新账户
                             Accounts.getAccounts().remove(oldIndex);
                             Accounts.getAccounts().add(oldIndex, account);
                         }
 
-                        // select the new account
+                        // 选择新账户
                         Accounts.setSelectedAccount(account);
 
                         spinner.hideSpinner();
@@ -292,6 +298,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                     }).executor(true);
         };
 
+        // 处理离线账户用户名验证
         if (factory instanceof OfflineAccountFactory && username != null && !USERNAME_CHECKER_PATTERN.matcher(username).matches()) {
             JFXButton btnYes = new JFXButton(i18n("button.ok"));
             btnYes.getStyleClass().add("dialog-error");
@@ -325,6 +332,9 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
     }
 
+    /**
+     * @description: 处理取消按钮点击事件
+     */
     private void onCancel() {
         if (loginTask != null) {
             loginTask.cancel();
@@ -332,6 +342,9 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         fireEvent(new DialogCloseEvent());
     }
 
+    /**
+     * @description: 初始化详情面板
+     */
     private void initDetailsPane() {
         if (detailsPane != null) {
             btnAccept.disableProperty().unbind();
@@ -339,125 +352,72 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             lblErrorMessage.setText("");
         }
 
-        // 注释掉微软账户相关逻辑
-        /*
-        if (factory == Accounts.FACTORY_MICROSOFT) {
-            VBox vbox = new VBox(8);
-            if (!Accounts.OAUTH_CALLBACK.getClientId().isEmpty()) {
-                HintPane hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
-                FXUtils.onChangeAndOperate(deviceCode, deviceCode -> {
-                    if (deviceCode != null) {
-                        FXUtils.copyText(deviceCode.getUserCode());
-                        hintPane.setSegment(i18n("account.methods.microsoft.manual", deviceCode.getUserCode(), deviceCode.getVerificationUri()));
-                    } else {
-                        hintPane.setSegment(i18n("account.methods.microsoft.hint"));
-                    }
-                });
-                FXUtils.onClicked(hintPane, () -> {
-                    if (deviceCode.get() != null) {
-                        FXUtils.copyText(deviceCode.get().getUserCode());
-                    }
-                });
-
-                holder.add(Accounts.OAUTH_CALLBACK.onGrantDeviceCode.registerWeak(value -> {
-                    runInFX(() -> deviceCode.set(value));
-                }));
-                FlowPane box = new FlowPane();
-                box.setHgap(8);
-                JFXHyperlink birthLink = new JFXHyperlink(i18n("account.methods.microsoft.birth"));
-                birthLink.setExternalLink("https://support.microsoft.com/account-billing/837badbc-999e-54d2-2617-d19206b9540a");
-                JFXHyperlink profileLink = new JFXHyperlink(i18n("account.methods.microsoft.profile"));
-                profileLink.setExternalLink("https://account.live.com/editprof.aspx");
-                JFXHyperlink purchaseLink = new JFXHyperlink(i18n("account.methods.microsoft.purchase"));
-                purchaseLink.setExternalLink(YggdrasilService.PURCHASE_URL);
-                JFXHyperlink deauthorizeLink = new JFXHyperlink(i18n("account.methods.microsoft.deauthorize"));
-                deauthorizeLink.setExternalLink("https://account.live.com/consent/Edit?client_id=000000004C794E0A");
-                JFXHyperlink forgotpasswordLink = new JFXHyperlink(i18n("account.methods.forgot_password"));
-                forgotpasswordLink.setExternalLink("https://account.live.com/ResetPassword.aspx");
-                JFXHyperlink createProfileLink = new JFXHyperlink(i18n("account.methods.microsoft.makegameidsettings"));
-                createProfileLink.setExternalLink("https://www.minecraft.net/msaprofile/mygames/editprofile");
-                JFXHyperlink bannedQueryLink = new JFXHyperlink(i18n("account.methods.ban_query"));
-                bannedQueryLink.setExternalLink("https://enforcement.xbox.com/enforcement/showenforcementhistory");
-                box.getChildren().setAll(profileLink, birthLink, purchaseLink, deauthorizeLink, forgotpasswordLink, createProfileLink, bannedQueryLink);
-                GridPane.setColumnSpan(box, 2);
-
-                if (!IntegrityChecker.isOfficial()) {
-                    HintPane unofficialHint = new HintPane(MessageDialogPane.MessageType.WARNING);
-                    unofficialHint.setText(i18n("unofficial.hint"));
-                    vbox.getChildren().add(unofficialHint);
-                }
-
-                vbox.getChildren().addAll(hintPane, box);
-
-                btnAccept.setDisable(false);
-            } else {
-                HintPane hintPane = new HintPane(MessageDialogPane.MessageType.WARNING);
-                hintPane.setSegment(i18n("account.methods.microsoft.snapshot"));
-
-                JFXHyperlink officialWebsite = new JFXHyperlink(i18n("account.methods.microsoft.snapshot.website"));
-                officialWebsite.setExternalLink(Metadata.PUBLISH_URL);
-
-                vbox.getChildren().setAll(hintPane, officialWebsite);
-                btnAccept.setDisable(true);
-            }
-
-            detailsPane = vbox;
-        } else {
-            detailsPane = new AccountDetailsInputPane(factory, btnAccept::fire);
-            btnAccept.disableProperty().bind(((AccountDetailsInputPane) detailsPane).validProperty().not());
-        }
-        */
-
-        // 简化后的逻辑：只支持离线账户
-        detailsPane = new AccountDetailsInputPane(factory, btnAccept::fire);
+        // 创建账户详情输入面板
+        detailsPane = new AccountDetailsInputPane(factory, accountMode, btnAccept::fire);
         btnAccept.disableProperty().bind(((AccountDetailsInputPane) detailsPane).validProperty().not());
 
         detailsContainer.getChildren().add(detailsPane);
     }
 
+    /**
+     * @description: 账户详情输入面板内部类
+     */
     private static class AccountDetailsInputPane extends GridPane {
 
-        // 注释掉第三方认证服务器相关代码
-        /*
-        // ==== authlib-injector hyperlinks ====
-        private static final String[] ALLOWED_LINKS = {"homepage", "register"};
-
-        private static List<Hyperlink> createHyperlinks(AuthlibInjectorServer server) {
-            if (server == null) {
-                return emptyList();
-            }
-
-            Map<String, String> links = server.getLinks();
-            List<Hyperlink> result = new ArrayList<>();
-            for (String key : ALLOWED_LINKS) {
-                String value = links.get(key);
-                if (value != null) {
-                    Hyperlink link = new Hyperlink(i18n("account.injector.link." + key));
-                    FXUtils.installSlowTooltip(link, value);
-                    link.setOnAction(e -> FXUtils.openLink(value));
-                    result.add(link);
-                }
-            }
-            return unmodifiableList(result);
-        }
-        // =====
-        */
-
+        /**
+         * @description: 账户工厂
+         */
         private final AccountFactory<?> factory;
-        // 注释掉第三方认证服务器相关字段
-        /*
-        private @Nullable AuthlibInjectorServer server;
-        private @Nullable JFXComboBox<AuthlibInjectorServer> cboServers;
-        */
+
+        /**
+         * @description: 账户模式
+         */
+        private final AccountMode accountMode;
+
+        /**
+         * @description: 用户名输入框
+         */
         private @Nullable JFXTextField txtUsername;
+
+        /**
+         * @description: 密码输入框
+         */
         private @Nullable JFXPasswordField txtPassword;
+
+        /**
+         * @description: UUID输入框
+         */
         private @Nullable JFXTextField txtUUID;
+
+        /**
+         * @description: 平台选择框
+         */
         private @Nullable JFXComboBox<String> cboPlatform;
+
+        /**
+         * @description: 房间号输入框
+         */
         private @Nullable JFXTextField txtRoomNumber;
+
+        /**
+         * @description: 卡密输入框
+         */
+        private @Nullable JFXTextField txtCardKey;
+
+        /**
+         * @description: 验证状态绑定
+         */
         private final BooleanBinding valid;
 
-        public AccountDetailsInputPane(AccountFactory<?> factory, Runnable onAction) {
+        /**
+         * @description: 构造函数
+         * @param factory 账户工厂
+         * @param accountMode 账户模式
+         * @param onAction 动作回调
+         */
+        public AccountDetailsInputPane(AccountFactory<?> factory, AccountMode accountMode, Runnable onAction) {
             this.factory = factory;
+            this.accountMode = accountMode;
 
             setVgap(22);
             setHgap(15);
@@ -472,81 +432,16 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
 
             int rowIndex = 0;
 
+            // 非官方版本警告
             if (!IntegrityChecker.isOfficial() && !(factory instanceof OfflineAccountFactory)) {
                 HintPane hintPane = new HintPane(MessageDialogPane.MessageType.WARNING);
                 hintPane.setSegment(i18n("unofficial.hint"));
                 GridPane.setColumnSpan(hintPane, 2);
                 add(hintPane, 0, rowIndex);
-
                 rowIndex++;
             }
 
-            // 注释掉第三方认证服务器相关UI
-            /*
-            if (factory instanceof BoundAuthlibInjectorAccountFactory) {
-                this.server = ((BoundAuthlibInjectorAccountFactory) factory).getServer();
-
-                Label lblServers = new Label(i18n("account.injector.server"));
-                setHalignment(lblServers, HPos.LEFT);
-                add(lblServers, 0, rowIndex);
-
-                Label lblServerName = new Label(this.server.getName());
-                lblServerName.setMaxWidth(Double.MAX_VALUE);
-                HBox.setHgrow(lblServerName, Priority.ALWAYS);
-
-                HBox linksContainer = new HBox();
-                linksContainer.setAlignment(Pos.CENTER);
-                linksContainer.getChildren().setAll(createHyperlinks(this.server));
-                linksContainer.setMinWidth(USE_PREF_SIZE);
-
-                HBox boxServers = new HBox(lblServerName, linksContainer);
-                boxServers.setAlignment(Pos.CENTER_LEFT);
-                add(boxServers, 1, rowIndex);
-
-                rowIndex++;
-            } else if (factory instanceof AuthlibInjectorAccountFactory) {
-                Label lblServers = new Label(i18n("account.injector.server"));
-                setHalignment(lblServers, HPos.LEFT);
-                add(lblServers, 0, rowIndex);
-
-                cboServers = new JFXComboBox<>();
-                cboServers.setCellFactory(jfxListCellFactory(server -> new TwoLineListItem(server.getName(), server.getUrl())));
-                cboServers.setConverter(stringConverter(AuthlibInjectorServer::getName));
-                bindContent(cboServers.getItems(), config().getAuthlibInjectorServers());
-                cboServers.getItems().addListener(onInvalidating(
-                        () -> Platform.runLater( // the selection will not be updated as expected if we call it immediately
-                                cboServers.getSelectionModel()::selectFirst)));
-                cboServers.getSelectionModel().selectFirst();
-                cboServers.setPromptText(i18n("account.injector.empty"));
-                BooleanBinding noServers = createBooleanBinding(cboServers.getItems()::isEmpty, cboServers.getItems());
-                classPropertyFor(cboServers, "jfx-combo-box-warning").bind(noServers);
-                classPropertyFor(cboServers, "jfx-combo-box").bind(noServers.not());
-                HBox.setHgrow(cboServers, Priority.ALWAYS);
-                HBox.setMargin(cboServers, new Insets(0, 10, 0, 0));
-                cboServers.setMaxWidth(Double.MAX_VALUE);
-
-                HBox linksContainer = new HBox();
-                linksContainer.setAlignment(Pos.CENTER);
-                onChangeAndOperate(cboServers.valueProperty(), server -> {
-                    this.server = server;
-                    linksContainer.getChildren().setAll(createHyperlinks(server));
-                });
-                linksContainer.setMinWidth(USE_PREF_SIZE);
-
-                JFXButton btnAddServer = new JFXButton();
-                btnAddServer.setGraphic(SVG.ADD.createIcon(Theme.blackFill(), 20));
-                btnAddServer.getStyleClass().add("toggle-icon4");
-                btnAddServer.setOnAction(e -> {
-                    Controllers.dialog(new AddAuthlibInjectorServerPane());
-                });
-
-                HBox boxServers = new HBox(cboServers, linksContainer, btnAddServer);
-                add(boxServers, 1, rowIndex);
-
-                rowIndex++;
-            }
-            */
-
+            // 用户名输入
             if (factory.getLoginType().requiresUsername) {
                 Label lblUsername = new Label(i18n("account.username"));
                 setHalignment(lblUsername, HPos.LEFT);
@@ -565,37 +460,51 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 setValidateWhileTextChanged(txtUsername, true);
                 txtUsername.setOnAction(e -> onAction.run());
                 add(txtUsername, 1, rowIndex);
-
                 rowIndex++;
 
-                // 添加直播平台选择器
+                // 根据账户模式显示不同的输入控件
                 if (factory instanceof OfflineAccountFactory) {
-                    Label lblPlatform = new Label("直播平台");
-                    setHalignment(lblPlatform, HPos.LEFT);
-                    add(lblPlatform, 0, rowIndex);
+                    if (accountMode == AccountMode.OFFLINE) {
+                        // 离线模式：显示直播平台选择器
+                        Label lblPlatform = new Label("直播平台");
+                        setHalignment(lblPlatform, HPos.LEFT);
+                        add(lblPlatform, 0, rowIndex);
 
-                    cboPlatform = new JFXComboBox<>();
-                    cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
-                    cboPlatform.setPromptText("请选择直播平台");
-                    cboPlatform.setMaxWidth(Double.MAX_VALUE);
-                    add(cboPlatform, 1, rowIndex);
+                        cboPlatform = new JFXComboBox<>();
+                        cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
+                        cboPlatform.setPromptText("请选择直播平台");
+                        cboPlatform.setMaxWidth(Double.MAX_VALUE);
+                        add(cboPlatform, 1, rowIndex);
+                        rowIndex++;
 
-                    rowIndex++;
+                        // 直播房间号输入框
+                        Label lblRoomNumber = new Label("直播房间号");
+                        setHalignment(lblRoomNumber, HPos.LEFT);
+                        add(lblRoomNumber, 0, rowIndex);
 
-                    // 添加直播房间号输入框
-                    Label lblRoomNumber = new Label("直播房间号");
-                    setHalignment(lblRoomNumber, HPos.LEFT);
-                    add(lblRoomNumber, 0, rowIndex);
+                        txtRoomNumber = new JFXTextField();
+                        txtRoomNumber.setPromptText("请输入直播房间号");
+                        txtRoomNumber.setOnAction(e -> onAction.run());
+                        add(txtRoomNumber, 1, rowIndex);
+                        rowIndex++;
+                    } else if (accountMode == AccountMode.CARD_KEY) {
+                        // 卡密模式：显示卡密输入框
+                        Label lblCardKey = new Label("卡密");
+                        setHalignment(lblCardKey, HPos.LEFT);
+                        add(lblCardKey, 0, rowIndex);
 
-                    txtRoomNumber = new JFXTextField();
-                    txtRoomNumber.setPromptText("请输入直播房间号");
-                    txtRoomNumber.setOnAction(e -> onAction.run());
-                    add(txtRoomNumber, 1, rowIndex);
-
-                    rowIndex++;
+                        txtCardKey = new JFXTextField();
+                        txtCardKey.setPromptText("请输入卡密");
+                        txtCardKey.setValidators(new RequiredValidator());
+                        setValidateWhileTextChanged(txtCardKey, true);
+                        txtCardKey.setOnAction(e -> onAction.run());
+                        add(txtCardKey, 1, rowIndex);
+                        rowIndex++;
+                    }
                 }
             }
 
+            // 密码输入
             if (factory.getLoginType().requiresPassword) {
                 Label lblPassword = new Label(i18n("account.password"));
                 setHalignment(lblPassword, HPos.LEFT);
@@ -606,19 +515,13 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 setValidateWhileTextChanged(txtPassword, true);
                 txtPassword.setOnAction(e -> onAction.run());
                 add(txtPassword, 1, rowIndex);
-
                 rowIndex++;
             }
 
+            // 离线账户的高级设置
             if (factory instanceof OfflineAccountFactory) {
                 txtUsername.setPromptText(i18n("account.methods.offline.name.special_characters"));
                 FXUtils.installFastTooltip(txtUsername, i18n("account.methods.offline.name.special_characters"));
-
-//                JFXHyperlink purchaseLink = new JFXHyperlink(i18n("account.methods.microsoft.purchase"));
-//                purchaseLink.setExternalLink(YggdrasilService.PURCHASE_URL);
-//                HBox linkPane = new HBox(purchaseLink);
-//                GridPane.setColumnSpan(linkPane, 2);
-//                add(linkPane, 0, rowIndex);
 
                 rowIndex++;
 
@@ -628,7 +531,6 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 advancedButton.setText(i18n("settings.advanced"));
                 GridPane.setColumnSpan(box, 2);
                 add(box, 0, rowIndex);
-
                 rowIndex++;
 
                 Label lblUUID = new Label(i18n("account.methods.offline.uuid"));
@@ -644,7 +546,6 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 txtUUID.promptTextProperty().bind(BindingMapping.of(txtUsername.textProperty()).map(name -> OfflineAccountFactory.getUUIDFromUserName(name).toString()));
                 txtUUID.setOnAction(e -> onAction.run());
                 add(txtUUID, 1, rowIndex);
-
                 rowIndex++;
 
                 HintPane hintPane = new HintPane(MessageDialogPane.MessageType.WARNING);
@@ -653,17 +554,12 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 hintPane.setText(i18n("account.methods.offline.uuid.hint"));
                 GridPane.setColumnSpan(hintPane, 2);
                 add(hintPane, 0, rowIndex);
-
                 rowIndex++;
             }
 
+            // 创建验证绑定
             valid = new BooleanBinding() {
                 {
-                    // 注释掉第三方认证服务器相关绑定
-                    /*
-                    if (cboServers != null)
-                        bind(cboServers.valueProperty());
-                    */
                     if (txtUsername != null)
                         bind(txtUsername.textProperty());
                     if (txtPassword != null)
@@ -674,99 +570,109 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                         bind(cboPlatform.valueProperty());
                     if (txtRoomNumber != null)
                         bind(txtRoomNumber.textProperty());
+                    if (txtCardKey != null)
+                        bind(txtCardKey.textProperty());
                 }
 
                 @Override
                 protected boolean computeValue() {
-                    // 注释掉第三方认证服务器相关验证
-                    /*
-                    if (cboServers != null && cboServers.getValue() == null)
-                        return false;
-                    */
                     if (txtUsername != null && !txtUsername.validate())
                         return false;
                     if (txtPassword != null && !txtPassword.validate())
                         return false;
                     if (txtUUID != null && !txtUUID.validate())
                         return false;
+                    if (txtCardKey != null && !txtCardKey.validate())
+                        return false;
                     return true;
                 }
             };
         }
 
+        /**
+         * @description: 检查是否需要邮箱格式的用户名
+         * @return boolean 是否需要邮箱格式
+         */
         private boolean requiresEmailAsUsername() {
-            // 注释掉第三方认证服务器相关逻辑
-            /*
-            if ((factory instanceof AuthlibInjectorAccountFactory) && this.server != null) {
-                return !server.isNonEmailLogin();
-            }
-            */
             return false;
         }
 
+        /**
+         * @description: 获取额外数据
+         * @return Object 额外数据对象
+         */
         public Object getAdditionalData() {
-            // 注释掉第三方认证服务器相关逻辑
-            /*
-            if (factory instanceof AuthlibInjectorAccountFactory) {
-                return getAuthServer();
-            } else if (factory instanceof OfflineAccountFactory) {
-                UUID uuid = txtUUID == null ? null : StringUtils.isBlank(txtUUID.getText()) ? null : UUIDTypeAdapter.fromString(txtUUID.getText());
-                return new OfflineAccountFactory.AdditionalData(uuid, null);
-            } else {
-                return null;
-            }
-            */
-
-            // 简化后的逻辑：只支持离线账户
             if (factory instanceof OfflineAccountFactory) {
                 UUID uuid = txtUUID == null ? null : StringUtils.isBlank(txtUUID.getText()) ? null : UUIDTypeAdapter.fromString(txtUUID.getText());
 
-                // 创建包含直播平台和房间号信息的数据对象
-                String platform = cboPlatform == null ? null : cboPlatform.getValue();
-                String roomNumber = txtRoomNumber == null ? null : txtRoomNumber.getText();
-
-                // 将直播信息存储在一个Map中，作为额外的数据传递
-                java.util.Map<String, Object> streamInfo = new java.util.HashMap<>();
-                if (platform != null && !platform.isEmpty()) {
-                    streamInfo.put("platform", platform);
+                if (accountMode == AccountMode.CARD_KEY) {
+                    // 卡密模式：创建包含卡密信息的AdditionalData
+                    String cardKey = txtCardKey == null ? null : txtCardKey.getText();
+                    return new OfflineAccountFactory.AdditionalData(uuid, null, null, null,
+                            cardKey != null ? cardKey.trim() : null, "CARD_KEY");
+                } else {
+                    // 离线模式：创建包含直播信息的AdditionalData
+                    String liveType = cboPlatform == null ? null : cboPlatform.getValue();
+                    String liveRoom = txtRoomNumber == null ? null : txtRoomNumber.getText();
+                    return new OfflineAccountFactory.AdditionalData(uuid, null, liveType,
+                            liveRoom != null ? liveRoom.trim() : null, null, "LIVE");
                 }
-                if (roomNumber != null && !roomNumber.trim().isEmpty()) {
-                    streamInfo.put("roomNumber", roomNumber.trim());
-                }
-
-                return new OfflineAccountFactory.AdditionalData(uuid,null);
             } else {
                 return null;
             }
         }
 
+        /**
+         * @description: 获取直播平台
+         * @return String 直播平台名称
+         */
         public @Nullable String getPlatform() {
             return cboPlatform == null ? null : cboPlatform.getValue();
         }
 
+        /**
+         * @description: 获取房间号
+         * @return String 房间号
+         */
         public @Nullable String getRoomNumber() {
             return txtRoomNumber == null ? null : txtRoomNumber.getText();
         }
 
-        // 注释掉第三方认证服务器相关方法
-        /*
-        public @Nullable AuthlibInjectorServer getAuthServer() {
-            return this.server;
+        /**
+         * @description: 获取卡密
+         * @return String 卡密
+         */
+        public @Nullable String getCardKey() {
+            return txtCardKey == null ? null : txtCardKey.getText();
         }
-        */
 
+        /**
+         * @description: 获取用户名
+         * @return String 用户名
+         */
         public @Nullable String getUsername() {
             return txtUsername == null ? null : txtUsername.getText();
         }
 
+        /**
+         * @description: 获取密码
+         * @return String 密码
+         */
         public @Nullable String getPassword() {
             return txtPassword == null ? null : txtPassword.getText();
         }
 
+        /**
+         * @description: 获取验证状态属性
+         * @return BooleanBinding 验证状态绑定
+         */
         public BooleanBinding validProperty() {
             return valid;
         }
 
+        /**
+         * @description: 设置焦点到用户名输入框
+         */
         public void focus() {
             if (txtUsername != null) {
                 txtUsername.requestFocus();
@@ -774,14 +680,34 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
     }
 
+    /**
+     * @description: 对话框字符选择器内部类
+     */
     private static class DialogCharacterSelector extends BorderPane implements CharacterSelector {
 
+        /**
+         * @description: 高级列表框
+         */
         private final AdvancedListBox listBox = new AdvancedListBox();
+
+        /**
+         * @description: 取消按钮
+         */
         private final JFXButton cancel = new JFXButton();
 
+        /**
+         * @description: 倒计时锁
+         */
         private final CountDownLatch latch = new CountDownLatch(1);
+
+        /**
+         * @description: 选中的游戏档案
+         */
         private GameProfile selectedProfile = null;
 
+        /**
+         * @description: 构造函数
+         */
         public DialogCharacterSelector() {
             setStyle("-fx-padding: 8px;");
 
@@ -801,6 +727,13 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             onEscPressed(this, cancel::fire);
         }
 
+        /**
+         * @description: 选择游戏档案
+         * @param service Yggdrasil服务
+         * @param profiles 游戏档案列表
+         * @return GameProfile 选中的游戏档案
+         * @throws NoSelectedCharacterException 未选择字符异常
+         */
         @Override
         public GameProfile select(YggdrasilService service, List<GameProfile> profiles) throws NoSelectedCharacterException {
             Platform.runLater(() -> {
@@ -833,6 +766,9 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
     }
 
+    /**
+     * @description: 对话框显示时的回调
+     */
     @Override
     public void onDialogShown() {
         if (detailsPane instanceof AccountDetailsInputPane) {
@@ -840,16 +776,29 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
     }
 
+    /**
+     * @description: UUID验证器内部类
+     */
     private static class UUIDValidator extends ValidatorBase {
 
+        /**
+         * @description: 默认构造函数
+         */
         public UUIDValidator() {
             this(i18n("account.methods.offline.uuid.malformed"));
         }
 
+        /**
+         * @description: 构造函数
+         * @param message 错误消息
+         */
         public UUIDValidator(@NamedArg("message") String message) {
             super(message);
         }
 
+        /**
+         * @description: 执行验证
+         */
         @Override
         protected void eval() {
             if (srcControl.get() instanceof TextInputControl) {
@@ -857,6 +806,9 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
             }
         }
 
+        /**
+         * @description: 验证文本输入字段
+         */
         private void evalTextInputField() {
             TextInputControl textField = ((TextInputControl) srcControl.get());
             if (StringUtils.isBlank(textField.getText())) {
@@ -873,5 +825,8 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
         }
     }
 
+    /**
+     * @description: 微软账户编辑档案URL常量
+     */
     private static final String MICROSOFT_ACCOUNT_EDIT_PROFILE_URL = "https://support.microsoft.com/account-billing/837badbc-999e-54d2-2617-d19206b9540a";
 }
