@@ -1,19 +1,10 @@
+// 文件：MainPage.java
+// 路径：HMCL/src/main/java/org/jackhuang/hmcl/ui/main/MainPage.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2021  huangyuhui <huanghongxun2008@126.com> and contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 在原有代码基础上添加启动前的账户验证逻辑
  */
 package org.jackhuang.hmcl.ui.main;
 
@@ -43,10 +34,20 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import org.jackhuang.hmcl.Metadata;
+import org.jackhuang.hmcl.auth.Account;
+import org.jackhuang.hmcl.auth.AuthorizationChecker;
+import org.jackhuang.hmcl.auth.CharacterSelector;
+import org.jackhuang.hmcl.auth.NoSelectedCharacterException;
+import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
+import org.jackhuang.hmcl.auth.yggdrasil.GameProfile;
+import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
 import org.jackhuang.hmcl.game.Version;
+import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.setting.Profiles;
 import org.jackhuang.hmcl.setting.Theme;
+import org.jackhuang.hmcl.task.Schedulers;
+import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
@@ -62,19 +63,32 @@ import org.jackhuang.hmcl.ui.versions.Versions;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
 import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.upgrade.UpdateHandler;
+import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 import static org.jackhuang.hmcl.ui.FXUtils.SINE;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
+import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
+/**
+ * @description: 主页面，集成了启动前的账户验证逻辑
+ */
 public final class MainPage extends StackPane implements DecoratorPage {
     private static final String ANNOUNCEMENT = "announcement";
+
+    /**
+     * @description: 用户名验证正则表达式
+     */
+    private static final Pattern USERNAME_CHECKER_PATTERN = Pattern.compile("^[A-Za-z0-9_]+$");
 
     private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>();
 
@@ -213,7 +227,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
             JFXButton launchButton = new JFXButton();
             launchButton.setPrefWidth(230);
             launchButton.setPrefHeight(55);
-            //launchButton.setButtonType(JFXButton.ButtonType.RAISED);
             launchButton.setOnAction(e -> launch());
             launchButton.setDefaultButton(true);
             launchButton.setClip(new Rectangle(-100, -100, 310, 200));
@@ -247,7 +260,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
             menuButton = new JFXButton();
             menuButton.setPrefHeight(55);
             menuButton.setPrefWidth(230);
-            //menuButton.setButtonType(JFXButton.ButtonType.RAISED);
             menuButton.setStyle("-fx-font-size: 15px;");
             menuButton.setOnAction(e -> onMenu());
             menuButton.setClip(new Rectangle(211, -100, 100, 200));
@@ -318,8 +330,177 @@ public final class MainPage extends StackPane implements DecoratorPage {
         }
     }
 
+    /**
+     * @description: 启动游戏，集成账户验证和创建逻辑
+     */
     private void launch() {
-        Versions.launch(Profiles.getSelectedProfile());
+        // 获取左侧栏的输入数据
+        RootPage.AccountInputData inputData = RootPage.getAccountInputData();
+
+        if (inputData == null) {
+            // 如果没有输入数据，使用传统的启动方式
+            Versions.launch(Profiles.getSelectedProfile());
+            return;
+        }
+
+        String username = inputData.getUsername();
+        String loginMethod = inputData.getLoginMethod();
+
+        // 验证输入数据的完整性
+        if (StringUtils.isBlank(username) || StringUtils.isBlank(loginMethod)) {
+            // 输入不完整，使用传统启动方式
+            Versions.launch(Profiles.getSelectedProfile());
+            return;
+        }
+
+        // 第一步：验证用户名格式
+        if (!USERNAME_CHECKER_PATTERN.matcher(username).matches()) {
+            Controllers.dialog("用户名格式不正确，只能包含字母、数字和下划线",
+                    "输入错误", MessageDialogPane.MessageType.ERROR);
+            return;
+        }
+
+        // 第二步：根据登录方式进行权限验证
+        boolean authResult = false;
+        String accountMode = "";
+        String liveType = null;
+        String liveRoom = null;
+        String cardKey = null;
+
+        if ("直播间验证".equals(loginMethod)) {
+            String platform = inputData.getPlatform();
+            String roomNumber = inputData.getRoomNumber();
+
+            if (StringUtils.isBlank(platform) || StringUtils.isBlank(roomNumber)) {
+                Controllers.dialog("请选择直播平台并输入直播间号",
+                        "输入错误", MessageDialogPane.MessageType.ERROR);
+                return;
+            }
+
+            LOG.info("开始直播间验证: platform=" + platform + ", roomNumber=" + roomNumber);
+            authResult = AuthorizationChecker.checkWebcastAuthorization(platform, roomNumber);
+
+            if (authResult) {
+                accountMode = "LIVE";
+                liveType = platform;
+                liveRoom = roomNumber;
+                LOG.info("直播间验证成功");
+            } else {
+                Controllers.dialog("直播间验证失败，请检查平台选择和直播间号是否正确，或确认该直播间是否已获得授权",
+                        "验证失败", MessageDialogPane.MessageType.ERROR);
+                LOG.info("直播间验证失败");
+                return;
+            }
+
+        } else if ("卡密验证".equals(loginMethod)) {
+            cardKey = inputData.getCardKey();
+
+            if (StringUtils.isBlank(cardKey)) {
+                Controllers.dialog("请输入卡密",
+                        "输入错误", MessageDialogPane.MessageType.ERROR);
+                return;
+            }
+
+            LOG.info("开始卡密验证");
+            authResult = AuthorizationChecker.checkCardAuthorization(cardKey);
+
+            if (authResult) {
+                accountMode = "CARD_KEY";
+                LOG.info("卡密验证成功");
+            } else {
+                Controllers.dialog("卡密验证失败，请检查卡密是否正确或是否已过期",
+                        "验证失败", MessageDialogPane.MessageType.ERROR);
+                LOG.info("卡密验证失败");
+                return;
+            }
+        } else {
+            Controllers.dialog("请选择登录方式",
+                    "输入错误", MessageDialogPane.MessageType.ERROR);
+            return;
+        }
+
+        // 验证通过，创建账户然后启动游戏
+        createAccountAndLaunch(username, accountMode, liveType, liveRoom, cardKey);
+    }
+
+    /**
+     * @description: 创建账户并启动游戏
+     * @param username 用户名
+     * @param accountMode 账户模式
+     * @param liveType 直播类型
+     * @param liveRoom 直播房间
+     * @param cardKey 卡密
+     */
+    private void createAccountAndLaunch(String username, String accountMode,
+                                        String liveType, String liveRoom, String cardKey) {
+
+        LOG.info("开始创建账户并启动游戏: username=" + username + ", accountMode=" + accountMode);
+
+        // 创建额外数据
+        UUID uuid = OfflineAccountFactory.getUUIDFromUserName(username);
+        OfflineAccountFactory.AdditionalData additionalData =
+                new OfflineAccountFactory.AdditionalData(uuid, null, liveType, liveRoom, cardKey, accountMode);
+
+        // 创建账户任务
+        Task<Account> createAccountTask = Task.supplyAsync(() -> {
+            try {
+                return Accounts.FACTORY_OFFLINE.create(new SimpleCharacterSelector(), username, null, null, additionalData);
+            } catch (Exception e) {
+                throw new RuntimeException("创建账户失败: " + e.getMessage(), e);
+            }
+        });
+
+        createAccountTask.whenComplete(Schedulers.javafx(), account -> {
+            try {
+                // 检查是否已存在账户，如果存在则替换
+                int oldIndex = Accounts.getAccounts().indexOf(account);
+                if (oldIndex == -1) {
+                    Accounts.getAccounts().add(account);
+                    LOG.info("添加新账户: " + username);
+                } else {
+                    // 替换现有账户
+                    Accounts.getAccounts().remove(oldIndex);
+                    Accounts.getAccounts().add(oldIndex, account);
+                    LOG.info("替换现有账户: " + username);
+                }
+
+                // 选择新账户
+                Accounts.setSelectedAccount(account);
+
+                LOG.info("账户创建完成，开始启动游戏");
+
+                // 启动游戏
+                Versions.launch(Profiles.getSelectedProfile());
+
+            } catch (Exception e) {
+                LOG.warning("Failed to process account", e);
+                Controllers.dialog("处理账户时发生错误: " + e.getMessage(),
+                        "处理失败", MessageDialogPane.MessageType.ERROR);
+            }
+        }, exception -> {
+            if (exception instanceof NoSelectedCharacterException) {
+                // 用户取消了字符选择，直接关闭
+                LOG.info("用户取消了字符选择");
+            } else if (!(exception instanceof CancellationException)) {
+                LOG.warning("Failed to create account", exception);
+                Controllers.dialog("创建账户失败: " + Accounts.localizeErrorMessage(exception),
+                        "创建失败", MessageDialogPane.MessageType.ERROR);
+            }
+        }).start();
+    }
+
+    /**
+     * @description: 简单字符选择器，用于离线账户
+     */
+    private static class SimpleCharacterSelector implements CharacterSelector {
+        @Override
+        public GameProfile select(YggdrasilService service, List<GameProfile> profiles) throws NoSelectedCharacterException {
+            // 对于离线账户，通常只有一个配置文件，直接返回第一个
+            if (profiles.isEmpty()) {
+                throw new NoSelectedCharacterException();
+            }
+            return profiles.get(0);
+        }
     }
 
     private void onMenu() {

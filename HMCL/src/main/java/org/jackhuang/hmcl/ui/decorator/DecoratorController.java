@@ -349,6 +349,9 @@ public class DecoratorController {
         if (event.getSource() != this.navigator) return;
         Node to = event.getNode();
 
+        // 添加动态左侧栏宽度调整逻辑
+        adjustLeftSidebarWidth(to);
+
         if (to instanceof Refreshable) {
             decorator.canRefreshProperty().bind(((Refreshable) to).refreshableProperty());
         } else {
@@ -380,6 +383,32 @@ public class DecoratorController {
             StackPane parent = (StackPane) region.getParent();
             region.prefWidthProperty().bind(parent.widthProperty());
             region.prefHeightProperty().bind(parent.heightProperty());
+        }
+    }
+
+    /**
+     * @description: 根据当前页面类型动态调整左侧栏宽度
+     * @param currentPage 当前页面节点
+     */
+    private void adjustLeftSidebarWidth(Node currentPage) {
+        if (currentPage instanceof DecoratorAnimatedPage) {
+            DecoratorAnimatedPage page = (DecoratorAnimatedPage) currentPage;
+            VBox leftPanel = page.getLeft();
+
+            // 根据页面类型设置不同宽度
+            int targetWidth;
+            if (currentPage.getClass().getSimpleName().equals("RootPage")) {
+                // RootPage使用350像素宽度以容纳账户输入控件
+                targetWidth = 350;
+                LOG.info("切换到主页面，调整左侧栏宽度为: " + targetWidth);
+            } else {
+                // 其他页面使用原始的200像素宽度
+                targetWidth = 200;
+                LOG.info("切换到其他页面: " + currentPage.getClass().getSimpleName() + "，调整左侧栏宽度为: " + targetWidth);
+            }
+
+            // 应用宽度限制
+            FXUtils.setLimitWidth(leftPanel, targetWidth);
         }
     }
 
