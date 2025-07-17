@@ -90,6 +90,12 @@ public class OfflineAccount extends Account {
     private final String accountMode;
 
     /**
+     * @description: 离线账户类的额外数据字段
+     * 用于存储liveType、liveRoom、cardKey等扩展信息
+     */
+    private String extraData;
+
+    /**
      * @description: 构造函数
      * @param downloader authlib注入器组件下载器
      * @param username 用户名
@@ -218,6 +224,22 @@ public class OfflineAccount extends Account {
      */
     public String getAccountMode() {
         return accountMode;
+    }
+
+    /**
+     * @description: 获取账户的额外数据
+     * @return String - 额外数据的JSON字符串
+     */
+    public String getExtraData() {
+        return extraData;
+    }
+
+    /**
+     * @description: 设置账户的额外数据
+     * @param extraData - 额外数据的JSON字符串
+     */
+    public void setExtraData(String extraData) {
+        this.extraData = extraData;
     }
 
     /**
