@@ -189,6 +189,12 @@ public class DecoratorSkin extends SkinBase<Decorator> {
             buttonsContainer.setAlignment(Pos.TOP_RIGHT);
             buttonsContainer.setMaxHeight(40);
             {
+                JFXButton btnGameItem = new JFXButton();
+                btnGameItem.setFocusTraversable(false);
+                btnGameItem.setGraphic(SVG.FORMAT_LIST_BULLETED.createIcon(Theme.foregroundFillBinding(), -1));
+                btnGameItem.getStyleClass().add("jfx-decorator-button");
+                btnGameItem.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
+
                 JFXButton btnHelp = new JFXButton();
                 btnHelp.setFocusTraversable(false);
                 btnHelp.setGraphic(SVG.SETTINGS.createIcon(Theme.foregroundFillBinding(), -1));
@@ -207,7 +213,7 @@ public class DecoratorSkin extends SkinBase<Decorator> {
                 btnClose.getStyleClass().add("jfx-decorator-button");
                 btnClose.setOnAction(e -> skinnable.close());
 
-                buttonsContainer.getChildren().setAll(btnHelp, btnMin, btnClose);
+                buttonsContainer.getChildren().setAll(btnGameItem, btnHelp, btnMin, btnClose);
             }
             AnchorPane layer = new AnchorPane();
             layer.setPickOnBounds(false);
