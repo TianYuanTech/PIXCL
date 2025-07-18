@@ -1,32 +1,18 @@
-// 文件：RootPage.java
+// 文件：RootPage.java (修改后的完整版本)
 // 路径：HMCL/src/main/java/org/jackhuang/hmcl/ui/main/RootPage.java
-/*
- * Hello Minecraft! Launcher
- * Copyright (C) 2021  huangyuhui <huanghongxun2008@126.com> and contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
 package org.jackhuang.hmcl.ui.main;
 
 import com.jfoenix.controls.JFXComboBox;
 import com.jfoenix.controls.JFXTextField;
+import javafx.application.Platform;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
+import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.ScrollPane;
@@ -47,9 +33,7 @@ import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
-import org.jackhuang.hmcl.ui.SVG;
-import org.jackhuang.hmcl.ui.account.AccountAdvancedListItem;
-import org.jackhuang.hmcl.ui.construct.AdvancedListItem;
+import org.jackhuang.hmcl.ui.account.PlayerAvatarView;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
 import org.jackhuang.hmcl.ui.construct.RequiredValidator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorAnimatedPage;
@@ -71,9 +55,8 @@ import java.util.stream.Collectors;
 
 import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.ui.FXUtils.setValidateWhileTextChanged;
-import static org.jackhuang.hmcl.ui.versions.VersionPage.wrap;
-import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
+import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 /**
  * @description: 主页面根页面，包含账户输入界面的左侧栏
@@ -106,8 +89,8 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
-     * @description: 获取账户输入数据，供MainPage使用
      * @return AccountInputData 账户输入数据
+     * @description: 获取账户输入数据，供MainPage使用
      */
     public static AccountInputData getAccountInputData() {
         if (accountInputControls == null) {
@@ -117,8 +100,8 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
-     * @description: 获取页面状态属性
      * @return ReadOnlyObjectProperty<State> 页面状态
+     * @description: 获取页面状态属性
      */
     @Override
     public ReadOnlyObjectProperty<State> stateProperty() {
@@ -126,8 +109,8 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
-     * @description: 创建默认皮肤
      * @return Skin 页面皮肤
+     * @description: 创建默认皮肤
      */
     @Override
     protected Skin createDefaultSkin() {
@@ -135,8 +118,8 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
-     * @description: 获取主页面实例
      * @return MainPage 主页面
+     * @description: 获取主页面实例
      */
     public MainPage getMainPage() {
         if (mainPage == null) {
@@ -181,13 +164,42 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
-     * @description: 皮肤实现类，包含账户输入界面的左侧栏
+     * @param repository 游戏仓库
+     * @description: 当版本刷新时的处理方法
+     */
+    private void onRefreshedVersions(HMCLGameRepository repository) {
+        runInFX(() -> {
+            if (!checkedModpack) {
+                checkedModpack = true;
+
+                if (repository.getVersionCount() == 0) {
+                    File modpackFile = new File("modpack.zip").getAbsoluteFile();
+                    if (modpackFile.exists()) {
+                        Task.supplyAsync(() -> CompressingUtils.findSuitableEncoding(modpackFile.toPath()))
+                                .thenApplyAsync(
+                                        encoding -> ModpackHelper.readModpackManifest(modpackFile.toPath(), encoding))
+                                .thenApplyAsync(modpack -> ModpackHelper
+                                        .getInstallTask(repository.getProfile(), modpackFile, modpack.getName(),
+                                                modpack)
+                                        .executor())
+                                .thenAcceptAsync(Schedulers.javafx(), executor -> {
+                                    Controllers.taskDialog(executor, i18n("modpack.installing"), TaskCancellationAction.NO_CANCEL);
+                                    executor.start();
+                                }).start();
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description: 皮肤实现类，包含玩家头像和账户输入界面的左侧栏
      */
     private static class Skin extends DecoratorAnimatedPageSkin<RootPage> {
 
         /**
-         * @description: 构造函数，创建包含账户输入界面的左侧栏
          * @param control 控制器
+         * @description: 构造函数，创建包含头像和账户输入界面的左侧栏
          */
         protected Skin(RootPage control) {
             super(control);
@@ -195,20 +207,32 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             // 创建左侧栏，调整宽度以适应新组件
             VBox leftSidebar = new VBox();
             leftSidebar.getStyleClass().add("advanced-list-box-content");
-            FXUtils.setLimitWidth(leftSidebar, 350); // 增加宽度以适应新组件
+            leftSidebar.setAlignment(Pos.TOP_CENTER); // 设置VBox内容居中对齐
+            leftSidebar.setSpacing(10); // 增加组件之间的间距
+            FXUtils.setLimitWidth(leftSidebar, 350);
 
-            // first item in left sidebar
-            AccountAdvancedListItem accountListItem = new AccountAdvancedListItem();
-            accountListItem.setOnAction(e -> Controllers.navigate(Controllers.getAccountListPage()));
-            accountListItem.accountProperty().bind(Accounts.selectedAccountProperty());
+            // 创建玩家头像组件
+            PlayerAvatarView playerAvatarView = new PlayerAvatarView();
+            playerAvatarView.accountProperty().bind(Accounts.selectedAccountProperty());
 
+            // 为头像添加点击事件，点击后跳转到账户列表页面
+            playerAvatarView.setOnMouseClicked(e -> Controllers.navigate(Controllers.getAccountListPage()));
+
+            // 设置头像的样式，添加一些视觉效果
+            playerAvatarView.getStyleClass().add("clickable-avatar");
+
+            // 为头像组件设置外边距
+            VBox.setMargin(playerAvatarView, new Insets(60, 0, 10, 0)); // 上边距20，下边距10
 
             // 创建账户输入控件
             accountInputControls = new AccountInputControls();
 
-            // 添加组件到左侧栏
+            // 为账户输入控件设置顶部外边距，使其整体下移
+            VBox.setMargin(accountInputControls, new Insets(20, 0, 0, 0)); // 增加40像素的顶部边距
+
+            // 添加组件到左侧栏，确保头像在顶部居中显示
             leftSidebar.getChildren().addAll(
-                    accountListItem,
+                    playerAvatarView,
                     accountInputControls
             );
 
@@ -239,25 +263,41 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             this.cardKey = cardKey;
         }
 
-        public String getUsername() { return username; }
-        public String getLoginMethod() { return loginMethod; }
-        public String getPlatform() { return platform; }
-        public String getRoomNumber() { return roomNumber; }
-        public String getCardKey() { return cardKey; }
+        public String getUsername() {
+            return username;
+        }
+
+        public String getLoginMethod() {
+            return loginMethod;
+        }
+
+        public String getPlatform() {
+            return platform;
+        }
+
+        public String getRoomNumber() {
+            return roomNumber;
+        }
+
+        public String getCardKey() {
+            return cardKey;
+        }
     }
 
     /**
-     * @description: 账户输入控件类，只负责界面输入，不包含验证逻辑
+     * @description: 检查是否已加载模组包的标志
      */
+    private boolean checkedModpack = false;
+
     /**
      * @description: 账户输入控件类，支持自动填充上次使用的账户数据
      */
     private static class AccountInputControls extends VBox {
 
         /**
-         * @description: 用户名输入框
+         * @description: 用户名输入组合框（可编辑的下拉框）
          */
-        private final JFXTextField txtUsername;
+        private final JFXComboBox<String> cboUsername;
 
         /**
          * @description: 登录方式选择器
@@ -306,18 +346,45 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         };
 
         /**
+         * @description: 用户名选择监听器，防止递归更新
+         */
+        private boolean isUpdatingUsernameSelection = false;
+
+        /**
          * @description: 构造函数，创建账户输入控件并设置默认值
          */
         public AccountInputControls() {
-            setSpacing(10);
-            setPadding(new Insets(15, 20, 15, 20));
+            setSpacing(25);
+            // 增加顶部内边距，原来是15，现在改为35，增加20像素的顶部空间
+            setPadding(new Insets(35, 20, 15, 20)); // 顶部35，左右20，底部15
 
-            // 用户名输入框
-            txtUsername = new JFXTextField();
-            txtUsername.setPromptText("请输入用户名");
-            txtUsername.setValidators(new RequiredValidator());
-            txtUsername.setPrefWidth(310);
-            setValidateWhileTextChanged(txtUsername, true);
+            // 用户名输入组合框（可编辑）
+            cboUsername = new JFXComboBox<>();
+            cboUsername.setEditable(true); // 设置为可编辑，用户既可以选择也可以输入
+            cboUsername.setPromptText("请输入或选择用户名");
+            cboUsername.setPrefWidth(310);
+            cboUsername.setMaxWidth(310);
+
+            // 绑定用户名选项到账户列表
+            initializeUsernameOptions();
+
+            // 添加用户名选择监听器，当选择已有账户时切换到该账户
+            cboUsername.valueProperty().addListener((observable, oldValue, newValue) -> {
+                if (!isUpdatingUsernameSelection && newValue != null) {
+                    switchToAccountByUsername(newValue);
+                }
+            });
+
+            // 添加焦点监听器，确保promptText正确处理
+            cboUsername.focusedProperty().addListener((observable, oldValue, newValue) -> {
+                if (!newValue) { // 失去焦点时
+                    // 如果编辑器为空且没有选择值，确保promptText显示
+                    String editorText = cboUsername.getEditor().getText();
+                    if ((editorText == null || editorText.trim().isEmpty()) && cboUsername.getValue() == null) {
+                        Platform.runLater(() -> cboUsername.setPromptText("请输入或选择用户名"));
+                    }
+                }
+            });
 
             // 登录方式选择器
             cboLoginMethod = new JFXComboBox<>();
@@ -372,10 +439,12 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 }
             });
 
-            // 创建验证绑定
+            // 创建验证绑定，使用直接验证方式处理用户名组合框
             validBinding = new BooleanBinding() {
                 {
-                    bind(txtUsername.textProperty());
+                    // 监听组合框的值变化和编辑器文本变化
+                    bind(cboUsername.valueProperty());
+                    bind(cboUsername.getEditor().textProperty());
                     bind(cboLoginMethod.valueProperty());
                     bind(cboPlatform.valueProperty());
                     bind(txtRoomNumber.textProperty());
@@ -384,7 +453,11 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
                 @Override
                 protected boolean computeValue() {
-                    if (!txtUsername.validate()) return false;
+                    // 直接验证用户名：检查组合框的值或编辑器的文本
+                    String usernameValue = getUsernameValue();
+                    if (usernameValue == null || usernameValue.trim().isEmpty()) {
+                        return false;
+                    }
 
                     String loginMethod = cboLoginMethod.getValue();
                     if (loginMethod == null) return false;
@@ -404,11 +477,97 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
             // 添加所有组件
             getChildren().addAll(
-                    txtUsername,
+                    cboUsername,
                     cboLoginMethod,
                     liveContainer,
                     cardKeyContainer
             );
+        }
+
+        /**
+         * @description: 初始化用户名选项，绑定到账户列表
+         */
+        private void initializeUsernameOptions() {
+            // 获取所有账户的用户名列表
+            ObservableList<Account> allAccounts = Accounts.getAccounts();
+
+            // 监听账户列表变化，动态更新用户名选项
+            allAccounts.addListener((ListChangeListener<Account>) change -> {
+                updateUsernameOptions();
+            });
+
+            // 初始更新用户名选项
+            updateUsernameOptions();
+        }
+
+        /**
+         * @description: 更新用户名选项列表
+         */
+        private void updateUsernameOptions() {
+            ObservableList<Account> allAccounts = Accounts.getAccounts();
+
+            // 获取当前选中的值，以便更新后恢复
+            String currentValue = cboUsername.getValue();
+            String currentEditorText = cboUsername.getEditor().getText();
+
+            // 清空现有选项
+            cboUsername.getItems().clear();
+
+            // 添加所有账户的用户名到选项中
+            for (Account account : allAccounts) {
+                String username = account.getUsername();
+                if (username != null && !username.trim().isEmpty()) {
+                    if (!cboUsername.getItems().contains(username)) {
+                        cboUsername.getItems().add(username);
+                    }
+                }
+            }
+
+            // 恢复之前的选择状态
+            if (currentValue != null && cboUsername.getItems().contains(currentValue)) {
+                isUpdatingUsernameSelection = true;
+                cboUsername.setValue(currentValue);
+                isUpdatingUsernameSelection = false;
+            } else if (currentEditorText != null && !currentEditorText.trim().isEmpty()) {
+                isUpdatingUsernameSelection = true;
+                cboUsername.getEditor().setText(currentEditorText);
+                isUpdatingUsernameSelection = false;
+            }
+        }
+
+        /**
+         * @description: 根据用户名切换到对应的账户
+         * @param username 用户名
+         */
+        private void switchToAccountByUsername(String username) {
+            if (username == null || username.trim().isEmpty()) {
+                return;
+            }
+
+            // 查找匹配的账户
+            ObservableList<Account> allAccounts = Accounts.getAccounts();
+            for (Account account : allAccounts) {
+                if (username.equals(account.getUsername())) {
+                    // 切换到该账户
+                    Accounts.setSelectedAccount(account);
+                    LOG.info("切换到账户: " + username);
+                    break;
+                }
+            }
+        }
+
+        /**
+         * @description: 获取用户名值，优先从编辑器获取输入的文本，如果为空则从选择值获取
+         * @return String 用户名
+         */
+        private String getUsernameValue() {
+            String editorText = cboUsername.getEditor().getText();
+            if (editorText != null && !editorText.trim().isEmpty()) {
+                return editorText.trim();
+            }
+
+            String selectedValue = cboUsername.getValue();
+            return selectedValue != null ? selectedValue.trim() : null;
         }
 
         /**
@@ -422,8 +581,34 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 return;
             }
 
-            // 填充用户名
-            txtUsername.setText(account.getUsername());
+            // 填充用户名到组合框，避免触发账户切换
+            String accountUsername = account.getUsername();
+            if (accountUsername != null && !accountUsername.trim().isEmpty()) {
+
+                // 使用Platform.runLater确保UI更新在正确的线程中执行
+                Platform.runLater(() -> {
+                    isUpdatingUsernameSelection = true;
+
+                    // 检查是否在下拉选项中
+                    if (cboUsername.getItems().contains(accountUsername)) {
+                        // 先清空编辑器文本，再设置选择值
+                        cboUsername.getEditor().clear();
+                        cboUsername.setValue(accountUsername);
+                    } else {
+                        // 如果不在选项中，先清空选择值，再设置编辑器文本
+                        cboUsername.setValue(null);
+                        cboUsername.getEditor().setText(accountUsername);
+
+                        // 手动触发编辑器的文本更新，确保promptText消失
+                        cboUsername.getEditor().positionCaret(accountUsername.length());
+                    }
+
+                    // 确保组件重新布局以正确显示内容
+                    cboUsername.requestLayout();
+
+                    isUpdatingUsernameSelection = false;
+                });
+            }
 
             // 如果是离线账户，尝试提取额外信息
             if (account instanceof OfflineAccount) {
@@ -469,7 +654,16 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          * @description: 清空所有输入字段
          */
         private void clearAllFields() {
-            txtUsername.clear();
+            // 使用Platform.runLater确保UI更新正确执行
+            Platform.runLater(() -> {
+                isUpdatingUsernameSelection = true;
+                cboUsername.setValue(null);
+                cboUsername.getEditor().clear();
+                // 重新设置promptText确保正确显示
+                cboUsername.setPromptText("请输入或选择用户名");
+                isUpdatingUsernameSelection = false;
+            });
+
             cboLoginMethod.setValue(null);
             clearModeSpecificFields();
         }
@@ -512,7 +706,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         public AccountInputData getInputData() {
             return new AccountInputData(
-                    txtUsername.getText(),
+                    getUsernameValue(), // 使用新的获取用户名方法
                     cboLoginMethod.getValue(),
                     cboPlatform.getValue(),
                     txtRoomNumber.getText(),
@@ -527,39 +721,5 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         public BooleanBinding validProperty() {
             return validBinding;
         }
-    }
-
-    /**
-     * @description: 检查是否已加载模组包的标志
-     */
-    private boolean checkedModpack = false;
-
-    /**
-     * @description: 当版本刷新时的处理方法
-     * @param repository 游戏仓库
-     */
-    private void onRefreshedVersions(HMCLGameRepository repository) {
-        runInFX(() -> {
-            if (!checkedModpack) {
-                checkedModpack = true;
-
-                if (repository.getVersionCount() == 0) {
-                    File modpackFile = new File("modpack.zip").getAbsoluteFile();
-                    if (modpackFile.exists()) {
-                        Task.supplyAsync(() -> CompressingUtils.findSuitableEncoding(modpackFile.toPath()))
-                                .thenApplyAsync(
-                                        encoding -> ModpackHelper.readModpackManifest(modpackFile.toPath(), encoding))
-                                .thenApplyAsync(modpack -> ModpackHelper
-                                        .getInstallTask(repository.getProfile(), modpackFile, modpack.getName(),
-                                                modpack)
-                                        .executor())
-                                .thenAcceptAsync(Schedulers.javafx(), executor -> {
-                                    Controllers.taskDialog(executor, i18n("modpack.installing"), TaskCancellationAction.NO_CANCEL);
-                                    executor.start();
-                                }).start();
-                    }
-                }
-            }
-        });
     }
 }
