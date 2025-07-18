@@ -27,10 +27,6 @@ public class AuthorizationChecker {
      * @description: JSON序列化工具
      */
     private static final Gson GSON = new Gson();
-    /**
-     * @description: TikTok专用服务器URL地址
-     */
-    private static final String TIKTOK_SERVER_URL = "https://tkapi.pixellive.cn";
 
     /**
      * @description: 官方服务器上下文ID，用于区分不同服务器的会话密钥
@@ -89,7 +85,7 @@ public class AuthorizationChecker {
         // 检查是否为TikTok或Twitch平台（不区分大小写）
         String platformLower = platform.toLowerCase();
         if ("tiktok".equals(platformLower) || "twitch".equals(platformLower)) {
-            return TIKTOK_SERVER_URL;
+            return Metadata.TIKTOK_SERVER_URL;
         }
 
         // 默认使用官方服务器
