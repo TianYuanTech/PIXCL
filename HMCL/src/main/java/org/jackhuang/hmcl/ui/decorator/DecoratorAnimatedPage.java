@@ -103,8 +103,11 @@ public class DecoratorAnimatedPage extends Control {
 
             BorderPane pane = new BorderPane();
             pane.setLeft(control.left);
-            // 关键修改：将左侧栏宽度限制从200增加到350，以适应账户输入控件
-            FXUtils.setLimitWidth(control.left, 350);
+
+            // 移除硬编码的宽度设置，使用默认宽度200像素
+            // 让DecoratorController统一管理左侧栏宽度
+            FXUtils.setLimitWidth(control.left, 200);
+
             pane.setCenter(control.center);
             getChildren().setAll(pane);
         }

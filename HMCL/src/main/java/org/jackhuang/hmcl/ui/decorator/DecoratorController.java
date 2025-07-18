@@ -51,8 +51,8 @@ import org.jackhuang.hmcl.ui.animation.AnimationUtils;
 import org.jackhuang.hmcl.ui.animation.ContainerAnimations;
 import org.jackhuang.hmcl.ui.construct.DialogAware;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
-import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.construct.JFXDialogPane;
+import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.wizard.Refreshable;
 import org.jackhuang.hmcl.ui.wizard.WizardProvider;
 import org.jetbrains.annotations.Nullable;
@@ -73,8 +73,8 @@ import static java.util.stream.Collectors.toList;
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 import static org.jackhuang.hmcl.ui.FXUtils.newBuiltinImage;
 import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
-import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 import static org.jackhuang.hmcl.util.io.FileUtils.getExtension;
+import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public class DecoratorController {
     private static final String PROPERTY_DIALOG_CLOSE_HANDLER = DecoratorController.class.getName() + ".dialog.closeListener";
@@ -407,8 +407,12 @@ public class DecoratorController {
                 LOG.info("切换到其他页面: " + currentPage.getClass().getSimpleName() + "，调整左侧栏宽度为: " + targetWidth);
             }
 
-            // 应用宽度限制
-            FXUtils.setLimitWidth(leftPanel, targetWidth);
+            // 使用Platform.runLater确保在UI线程中执行
+            Platform.runLater(() -> {
+                FXUtils.setLimitWidth(leftPanel, targetWidth);
+                // 强制请求布局更新以确保宽度变化立即生效
+                leftPanel.requestLayout();
+            });
         }
     }
 
