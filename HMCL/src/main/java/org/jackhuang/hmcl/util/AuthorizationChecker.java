@@ -1,6 +1,7 @@
-package org.jackhuang.hmcl.auth;
+package org.jackhuang.hmcl.util;
 
 import com.google.gson.Gson;
+import org.jackhuang.hmcl.Metadata;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -14,10 +15,6 @@ import java.util.stream.Collectors;
  * @description: 授权检查器，负责验证直播间和卡密的授权状态
  */
 public class AuthorizationChecker {
-    /**
-     * @description: 官方服务器URL地址
-     */
-    public static final String OFFICIAL_SERVER_URL = "https://api.pixellive.cn";
     /**
      * @description: HTTP连接超时时间（毫秒）
      */
@@ -62,8 +59,8 @@ public class AuthorizationChecker {
             String serverUrl = selectServerUrlByPlatform(platform);
 
             // 构建请求URL
-            String encodedPlatform = URLEncoder.encode(platform, StandardCharsets.UTF_8);
-            String encodedStudioName = URLEncoder.encode(studioName, StandardCharsets.UTF_8);
+            String encodedPlatform = URLEncoder.encode(platform, StandardCharsets.UTF_8.toString());
+            String encodedStudioName = URLEncoder.encode(studioName, StandardCharsets.UTF_8.toString());
             String fullUrl = serverUrl + "/check/webcast/authorization" +
                     "?platform=" + encodedPlatform + "&studioName=" + encodedStudioName;
 
@@ -86,7 +83,7 @@ public class AuthorizationChecker {
      */
     private static String selectServerUrlByPlatform(String platform) {
         if (platform == null) {
-            return OFFICIAL_SERVER_URL;
+            return Metadata.PUBLISH_URL;
         }
 
         // 检查是否为TikTok或Twitch平台（不区分大小写）
@@ -96,7 +93,7 @@ public class AuthorizationChecker {
         }
 
         // 默认使用官方服务器
-        return OFFICIAL_SERVER_URL;
+        return Metadata.PUBLISH_URL;
     }
 
     /**
@@ -112,8 +109,9 @@ public class AuthorizationChecker {
 
         try {
             // 构建请求URL
-            String encodedCardKey = URLEncoder.encode(cardKey, StandardCharsets.UTF_8);
-            String fullUrl = OFFICIAL_SERVER_URL + "/check/card/authorization" +
+            String encodedCardKey = URLEncoder.encode(cardKey, StandardCharsets.UTF_8.toString());
+
+            String fullUrl = Metadata.PUBLISH_URL + "/check/card/authorization" +
                     "?cardKey=" + encodedCardKey;
 
             // 创建HTTP连接（使用POST方法）

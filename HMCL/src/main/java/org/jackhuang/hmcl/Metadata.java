@@ -44,7 +44,7 @@ public final class Metadata {
     public static final String TITLE = NAME + " " + VERSION;
     public static final String FULL_TITLE = FULL_NAME + " v" + VERSION;
 
-    public static final String PUBLISH_URL = "https://hmcl.huangyuhui.net";
+    public static final String PUBLISH_URL = "https://api.pixellive.cn";
     public static final String ABOUT_URL = PUBLISH_URL + "/about";
     public static final String DOWNLOAD_URL = PUBLISH_URL + "/download";
     public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", PUBLISH_URL + "/api/update_link");

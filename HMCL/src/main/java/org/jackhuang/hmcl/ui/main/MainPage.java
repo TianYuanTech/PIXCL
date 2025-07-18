@@ -35,7 +35,6 @@ import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.Account;
-import org.jackhuang.hmcl.auth.AuthorizationChecker;
 import org.jackhuang.hmcl.auth.CharacterSelector;
 import org.jackhuang.hmcl.auth.NoSelectedCharacterException;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
@@ -63,6 +62,7 @@ import org.jackhuang.hmcl.ui.versions.Versions;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
 import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.upgrade.UpdateHandler;
+import org.jackhuang.hmcl.util.AuthorizationChecker;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
@@ -176,6 +176,9 @@ public final class MainPage extends StackPane implements DecoratorPage {
         StackPane.setAlignment(updatePane, Pos.TOP_RIGHT);
         FXUtils.onClicked(updatePane, this::onUpgrade);
         FXUtils.onChange(showUpdateProperty(), this::showUpdate);
+        // 绑定更新状态到UI属性
+        showUpdate.bind(UpdateChecker.outdatedProperty());
+        latestVersion.bind(UpdateChecker.latestVersionProperty());
 
         {
             HBox hBox = new HBox();
