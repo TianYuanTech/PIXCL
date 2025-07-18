@@ -355,12 +355,11 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         public AccountInputControls() {
             setSpacing(25);
-            // 增加顶部内边距，原来是15，现在改为35，增加20像素的顶部空间
-            setPadding(new Insets(35, 20, 15, 20)); // 顶部35，左右20，底部15
+            setPadding(new Insets(35, 20, 15, 20));
 
             // 用户名输入组合框（可编辑）
             cboUsername = new JFXComboBox<>();
-            cboUsername.setEditable(true); // 设置为可编辑，用户既可以选择也可以输入
+            cboUsername.setEditable(true);
             cboUsername.setPromptText("请输入或选择用户名");
             cboUsername.setPrefWidth(310);
             cboUsername.setMaxWidth(310);
@@ -368,17 +367,16 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             // 绑定用户名选项到账户列表
             initializeUsernameOptions();
 
-            // 添加用户名选择监听器，当选择已有账户时切换到该账户
+            // 添加用户名选择监听器
             cboUsername.valueProperty().addListener((observable, oldValue, newValue) -> {
                 if (!isUpdatingUsernameSelection && newValue != null) {
                     switchToAccountByUsername(newValue);
                 }
             });
 
-            // 添加焦点监听器，确保promptText正确处理
+            // 添加焦点监听器
             cboUsername.focusedProperty().addListener((observable, oldValue, newValue) -> {
-                if (!newValue) { // 失去焦点时
-                    // 如果编辑器为空且没有选择值，确保promptText显示
+                if (!newValue) {
                     String editorText = cboUsername.getEditor().getText();
                     if ((editorText == null || editorText.trim().isEmpty()) && cboUsername.getValue() == null) {
                         Platform.runLater(() -> cboUsername.setPromptText("请输入或选择用户名"));
@@ -392,8 +390,6 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             cboLoginMethod.setPromptText("登录方式");
             cboLoginMethod.setPrefWidth(310);
             cboLoginMethod.setMaxWidth(310);
-            // 设置默认选择为直播间验证
-            cboLoginMethod.setValue("直播间验证");
 
             // 直播平台选择器
             cboPlatform = new JFXComboBox<>();
@@ -413,9 +409,6 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             liveContainer = new HBox(5);
             liveContainer.setAlignment(Pos.CENTER_LEFT);
             liveContainer.getChildren().addAll(cboPlatform, txtRoomNumber);
-            // 由于默认选择直播间验证，所以直接显示
-            liveContainer.setVisible(true);
-            liveContainer.setManaged(true);
 
             // 卡密输入框
             txtCardKey = new JFXTextField();
@@ -427,11 +420,8 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             // 卡密验证容器
             cardKeyContainer = new VBox();
             cardKeyContainer.getChildren().add(txtCardKey);
-            // 默认隐藏卡密验证容器
-            cardKeyContainer.setVisible(false);
-            cardKeyContainer.setManaged(false);
 
-            // 设置登录方式变化监听器
+            // 先设置登录方式变化监听器
             cboLoginMethod.valueProperty().addListener(new ChangeListener<String>() {
                 @Override
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -439,10 +429,9 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 }
             });
 
-            // 创建验证绑定，使用直接验证方式处理用户名组合框
+            // 创建验证绑定
             validBinding = new BooleanBinding() {
                 {
-                    // 监听组合框的值变化和编辑器文本变化
                     bind(cboUsername.valueProperty());
                     bind(cboUsername.getEditor().textProperty());
                     bind(cboLoginMethod.valueProperty());
@@ -453,7 +442,6 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
                 @Override
                 protected boolean computeValue() {
-                    // 直接验证用户名：检查组合框的值或编辑器的文本
                     String usernameValue = getUsernameValue();
                     if (usernameValue == null || usernameValue.trim().isEmpty()) {
                         return false;
@@ -472,8 +460,17 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 }
             };
 
-            // 绑定到当前选中的账户
+            // 最后绑定到当前选中的账户
             currentAccount.bind(Accounts.selectedAccountProperty());
+
+            // 延迟初始化默认状态，避免与账户绑定冲突
+            Platform.runLater(() -> {
+                Account currentSelectedAccount = Accounts.getSelectedAccount();
+                if (currentSelectedAccount == null) {
+                    // 只有在没有选中账户时才设置默认值
+                    setDefaultState();
+                }
+            });
 
             // 添加所有组件
             getChildren().addAll(
@@ -482,6 +479,14 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                     liveContainer,
                     cardKeyContainer
             );
+        }
+
+        /**
+         * @description: 设置默认状态
+         */
+        private void setDefaultState() {
+            cboLoginMethod.setValue("直播间验证");
+            // updateLoginMethodVisibility 会通过监听器自动调用
         }
 
         /**
