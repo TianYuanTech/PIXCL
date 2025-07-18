@@ -27,7 +27,8 @@ val buildNumber = System.getenv("BUILD_NUMBER")?.toInt().let { number ->
     }
 }
 val versionRoot = System.getenv("VERSION_ROOT") ?: "1.0"
-val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "unofficial"
+//val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "unofficial"
+val versionType = System.getenv("VERSION_TYPE") ?: "stable"
 
 val microsoftAuthId = System.getenv("MICROSOFT_AUTH_ID") ?: ""
 val microsoftAuthSecret = System.getenv("MICROSOFT_AUTH_SECRET") ?: ""

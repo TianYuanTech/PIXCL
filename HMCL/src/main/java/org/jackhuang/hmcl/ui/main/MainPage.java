@@ -88,7 +88,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
     /**
      * @description: 用户名验证正则表达式
      */
-    private static final Pattern USERNAME_CHECKER_PATTERN = Pattern.compile("^[A-Za-z0-9_]+$");
+    private static final Pattern USERNAME_CHECKER_PATTERN = Pattern.compile("^[A-Za-z0-9_]{1,16}$");
 
     private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>();
 
@@ -337,25 +337,21 @@ public final class MainPage extends StackPane implements DecoratorPage {
         // 获取左侧栏的输入数据
         RootPage.AccountInputData inputData = RootPage.getAccountInputData();
 
-        if (inputData == null) {
-            // 如果没有输入数据，使用传统的启动方式
-            Versions.launch(Profiles.getSelectedProfile());
+        if (inputData == null ||
+                StringUtils.isBlank(inputData.getUsername()) ||
+                StringUtils.isBlank(inputData.getLoginMethod())) {
+
+            Controllers.dialog("请输入用户名并选择登陆方式以创建账户",
+                    "启动失败", MessageDialogPane.MessageType.ERROR);
             return;
         }
 
         String username = inputData.getUsername();
         String loginMethod = inputData.getLoginMethod();
 
-        // 验证输入数据的完整性
-        if (StringUtils.isBlank(username) || StringUtils.isBlank(loginMethod)) {
-            // 输入不完整，使用传统启动方式
-            Versions.launch(Profiles.getSelectedProfile());
-            return;
-        }
-
         // 第一步：验证用户名格式
         if (!USERNAME_CHECKER_PATTERN.matcher(username).matches()) {
-            Controllers.dialog("用户名格式不正确，只能包含字母、数字和下划线",
+            Controllers.dialog("用户名格式不正确，仅支持英文字母丶数字及下划线，且长度不超过16个字符。",
                     "输入错误", MessageDialogPane.MessageType.ERROR);
             return;
         }

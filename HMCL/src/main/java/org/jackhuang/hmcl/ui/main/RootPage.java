@@ -641,14 +641,14 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
                 } else {
                     // 未知模式或数据不完整，清空相关字段
-                    cboLoginMethod.setValue(null);
+                    cboLoginMethod.setValue("直播间验证");
                     clearModeSpecificFields();
 
                     LOG.info("账户模式未知或数据不完整，清空模式相关字段");
                 }
             } else {
                 // 非离线账户，只填充用户名，其他字段清空
-                cboLoginMethod.setValue(null);
+                cboLoginMethod.setValue("直播间验证");
                 clearModeSpecificFields();
 
                 LOG.info("非离线账户，仅填充用户名: " + account.getUsername());
@@ -669,7 +669,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 isUpdatingUsernameSelection = false;
             });
 
-            cboLoginMethod.setValue(null);
+            cboLoginMethod.setValue("直播间验证");
             clearModeSpecificFields();
         }
 
@@ -677,7 +677,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          * @description: 清空模式相关的输入字段
          */
         private void clearModeSpecificFields() {
-            cboPlatform.setValue(null);
+            cboPlatform.setValue("抖音");
             txtRoomNumber.clear();
             txtCardKey.clear();
         }
