@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.net.URL;
 
 import static org.jackhuang.hmcl.Metadata.CHANGELOG_URL;
-import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
@@ -93,7 +92,11 @@ public final class UpgradeDialog extends JFXDialogLayout {
         cancelButton.getStyleClass().add("dialog-cancel");
         cancelButton.setOnAction(e -> fireEvent(new DialogCloseEvent()));
 
-        setActions(openInBrowser, updateButton, cancelButton);
-        onEscPressed(this, cancelButton::fire);
+        setActions(
+                openInBrowser
+                ,updateButton
+//                ,cancelButton
+        );
+//        onEscPressed(this, cancelButton::fire);
     }
 }
