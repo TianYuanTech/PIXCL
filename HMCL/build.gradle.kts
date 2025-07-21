@@ -43,6 +43,7 @@ dependencies {
     implementation("libs:JFoenix")
     implementation(libs.twelvemonkeys.imageio.webp)
     implementation(libs.java.info)
+    implementation(project(":McPatchClient"))
 
     if (launcherExe == null) {
         implementation("org.glavo.hmcl:HMCLauncher:3.6.0.4")

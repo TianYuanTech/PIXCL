@@ -33,6 +33,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
+import mcpatch.McPatchClient;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.CharacterSelector;
@@ -416,6 +417,49 @@ public final class MainPage extends StackPane implements DecoratorPage {
             Controllers.dialog("请选择登录方式",
                     "输入错误", MessageDialogPane.MessageType.ERROR);
             return;
+        }
+
+        // 第三步：验证通过后，先进行文件更新检查
+        LOG.info("账户验证完成，开始文件更新检查");
+
+        // 第三步：验证通过后，先进行文件更新检查
+        LOG.info("账户验证完成，开始文件更新检查");
+
+        try {
+            // 检查McPatchClient是否可用
+            Class.forName("mcpatch.McPatchClient");
+
+            LOG.info("开始调用McPatchClient进行文件更新检查...");
+
+            // 直接调用McPatchClient的modloader方法
+            // 参数：enableLogFile=true, disableTheme=false
+            boolean hasUpdates = McPatchClient.modloader(true, false);
+
+            if (hasUpdates) {
+                LOG.info("文件更新完成");
+            } else {
+                LOG.info("文件已是最新版本");
+            }
+
+        } catch (ClassNotFoundException e) {
+            LOG.info("McPatchClient不可用，跳过文件更新检查");
+        } catch (Exception e) {
+            LOG.warning("文件更新检查失败，但游戏仍将继续启动: " + e.getMessage(), e);
+
+            // 使用正确的确认对话框方式
+            Controllers.dialog(new MessageDialogPane.Builder("更新检查失败",
+                    "文件更新检查失败: " + e.getMessage() + "\n\n是否继续启动游戏？",
+                    MessageDialogPane.MessageType.QUESTION)
+                    .addAction(i18n("button.yes"), () -> {
+                        // 用户选择继续启动游戏
+
+                    })
+                    .addAction(i18n("button.no"), () -> {
+                        // 用户选择取消启动
+                        LOG.info("用户选择取消启动");
+                        return; // 等待用户选择，不继续执行后续代码
+                    })
+                    .build());
         }
 
         // 验证通过，创建账户然后启动游戏
