@@ -50,8 +50,10 @@ class McPatchClient
             val updateDir = getUpdateDirectory(workDir, options)
 
             // 初始化日志系统
-            if (enableLogFile)
-                Log.addHandler(FileHandler(Log, progDir + (if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt")))
+            if (enableLogFile) {
+                val logFilePath = getLogFilePath(workDir, progDir, graphicsMode)
+                Log.addHandler(FileHandler(Log, logFilePath))
+            }
 
             val consoleLogLevel = if (Environment.IsProduction)
                     (if (graphicsMode || !enableLogFile) Log.LogLevel.DEBUG else Log.LogLevel.INFO)
@@ -432,5 +434,43 @@ class McPatchClient
             Log.info("finished!")
             return result
         }
+    }
+
+    /**
+     * @description: 获取日志文件的存储路径，优先使用.minecraft\logs目录
+     * @param workDir 工作目录
+     * @param progDir 程序目录
+     * @param graphicsMode 是否为图形模式
+     * @return 日志文件的完整路径
+     */
+    fun getLogFilePath(workDir: File2, progDir: File2, graphicsMode: Boolean): File2 {
+        try {
+            // 查找.minecraft目录
+            val minecraftParentDir = searchDotMinecraft(workDir)
+
+            if (minecraftParentDir != null) {
+                // 构建.minecraft\logs目录路径
+                val minecraftDir = minecraftParentDir + ".minecraft"
+                val logsDir = minecraftDir + "logs"
+
+                // 确保logs目录存在
+                logsDir.mkdirs()
+
+                // 返回完整的日志文件路径
+                val logFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
+                val logFilePath = logsDir + logFileName
+
+                Log.debug("日志文件路径设置为: ${logFilePath.path}")
+                return logFilePath
+            }
+        } catch (e: Exception) {
+            Log.warn("无法访问.minecraft\\logs目录，使用默认日志路径: ${e.message}")
+        }
+
+        // 如果无法找到.minecraft目录或创建logs目录失败，回退到程序目录
+        val fallbackFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
+        val fallbackPath = progDir + fallbackFileName
+        Log.debug("使用备用日志文件路径: ${fallbackPath.path}")
+        return fallbackPath
     }
 }

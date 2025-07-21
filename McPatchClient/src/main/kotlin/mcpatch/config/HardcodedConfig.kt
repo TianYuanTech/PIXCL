@@ -48,7 +48,7 @@ object HardcodedConfig {
 
             // 版本管理配置
             "auto-restart-version" to true,
-            "version-file" to "mc-patch-version.txt",
+            "version-file" to ".minecraft/config/mc-patch-version.txt",
             "server-versions-file-name" to "versions.txt",
 
             // HTTP协议配置
