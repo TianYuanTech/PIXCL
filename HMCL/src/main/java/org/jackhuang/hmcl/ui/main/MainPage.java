@@ -33,7 +33,6 @@ import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
-import mcpatch.McPatchClient;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.CharacterSelector;
@@ -68,6 +67,9 @@ import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -310,7 +312,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
                         config().setPromptedVersion(getLatestVersion().getVersion());
                         onUpgrade();
                     })
-                    .addCancel(null)
+//                    .addCancel(null)
                     .build());
         }
     }
@@ -335,9 +337,159 @@ public final class MainPage extends StackPane implements DecoratorPage {
     }
 
     /**
-     * @description: 启动游戏，集成账户验证和创建逻辑
+     * @description: 启动游戏，集成网络检查、启动器更新检查、账户验证和创建逻辑
+     * 执行顺序：网络连接检查 -> 启动器更新检查 -> 账户验证 -> 文件更新 -> 游戏启动
      */
     private void launch() {
+        // 第一步：检查网络连接
+        if (!checkNetworkConnection()) {
+            // 网络不可用，终止启动流程
+            return;
+        }
+
+        // 第二步：检查启动器更新
+        if (checkLauncherUpdateBeforeLaunch()) {
+            // 有更新，启动流程被取消
+            return;
+        }
+
+        // 网络正常且无更新，继续执行原有的启动逻辑
+        proceedWithGameLaunch();
+    }
+
+    /**
+     * @description: 检查网络连接状态
+     * @return boolean - true表示网络连接正常，false表示网络连接失败
+     */
+    private boolean checkNetworkConnection() {
+        LOG.info("开始检查网络连接状态...");
+
+        try {
+            // 使用多个可靠的服务器进行网络连接测试
+            boolean networkAvailable = performNetworkConnectivityTest();
+
+            if (networkAvailable) {
+                LOG.info("网络连接检查通过");
+                return true;
+            } else {
+                LOG.warning("网络连接检查失败：无法访问外部服务器");
+                showNetworkErrorDialog();
+                return false;
+            }
+
+        } catch (Exception e) {
+            LOG.warning("网络连接检查过程中发生异常: " + e.getMessage(), e);
+            showNetworkErrorDialog();
+            return false;
+        }
+    }
+
+    /**
+     * @description: 执行实际的网络连通性测试
+     * @return boolean - 网络连接测试结果
+     */
+    private boolean performNetworkConnectivityTest() {
+        // 定义多个测试服务器，提高检测准确性
+        String[] testUrls = {
+                "https://www.google.com",
+                "https://www.baidu.com",
+                "https://www.github.com",
+                "https://httpbin.org/status/200"
+        };
+
+        // 设置连接参数
+        int timeoutMillis = 5000; // 5秒超时
+        int successThreshold = 1; // 至少一个服务器响应成功即认为网络可用
+        int successCount = 0;
+
+        for (String testUrl : testUrls) {
+            try {
+                LOG.info("测试网络连接: " + testUrl);
+
+                URL url = new URL(testUrl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(timeoutMillis);
+                connection.setReadTimeout(timeoutMillis);
+                connection.setRequestProperty("User-Agent", "HMCL/" + Metadata.VERSION);
+
+                int responseCode = connection.getResponseCode();
+                connection.disconnect();
+
+                if (responseCode >= 200 && responseCode < 400) {
+                    LOG.info("网络连接测试成功: " + testUrl + " (响应码: " + responseCode + ")");
+                    successCount++;
+
+                    return true;
+                } else {
+                    LOG.warning("网络连接测试失败: " + testUrl + " (响应码: " + responseCode + ")");
+                }
+
+            } catch (IOException e) {
+                LOG.warning("网络连接测试异常: " + testUrl + " - " + e.getMessage());
+            } catch (Exception e) {
+                LOG.warning("网络连接测试发生未预期异常: " + testUrl + " - " + e.getMessage(), e);
+            }
+        }
+
+        LOG.warning("所有网络连接测试均失败，成功连接数: " + successCount + "/" + testUrls.length);
+        return false;
+    }
+
+    /**
+     * @description: 显示网络连接错误对话框
+     */
+    private void showNetworkErrorDialog() {
+        Controllers.dialog(new MessageDialogPane.Builder(
+                "网络连接失败",
+                "检测到网络连接不可用，无法启动游戏。\n\n" +
+                        "请检查以下项目：\n" +
+                        "• 确认网络连接是否正常\n" +
+                        "• 检查防火墙或代理设置\n" +
+                        "• 验证DNS配置是否正确\n" +
+                        "• 尝试重启网络适配器\n\n" +
+                        "网络连接恢复后请重新尝试启动游戏。",
+                MessageDialogPane.MessageType.ERROR)
+                .addAction("重试", () -> {
+                    LOG.info("用户选择重试网络连接");
+                    // 重新执行启动流程
+                    launch();
+                })
+                .addAction("取消", () -> {
+                    LOG.info("用户取消启动流程");
+                    // 用户取消，不执行任何操作
+                })
+                .build());
+    }
+
+    /**
+     * @description: 检查启动器更新，如果有更新则启动更新流程并取消游戏启动
+     * @return boolean - true表示发现更新并启动了更新流程，false表示无更新可以继续启动游戏
+     */
+    private boolean checkLauncherUpdateBeforeLaunch() {
+        // 检查是否有可用的启动器更新
+        boolean hasUpdate = UpdateChecker.isOutdated();
+
+        if (hasUpdate) {
+            RemoteVersion latestVersion = UpdateChecker.getLatestVersion();
+            LOG.info("检测到启动器更新，版本: " + (latestVersion != null ? latestVersion.getVersion() : "未知"));
+
+            // 直接调用现有的更新方法
+            onUpgrade();
+
+            // 返回true表示启动了更新流程，需要取消游戏启动
+            return true;
+        }
+
+        LOG.info("启动器已是最新版本，继续启动流程");
+        return false;
+    }
+
+    /**
+     * @description: 执行原有的游戏启动逻辑
+     * 包含账户验证、文件更新检查等步骤
+     */
+    private void proceedWithGameLaunch() {
         // 获取左侧栏的输入数据
         RootPage.AccountInputData inputData = RootPage.getAccountInputData();
 
@@ -417,49 +569,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
             Controllers.dialog("请选择登录方式",
                     "输入错误", MessageDialogPane.MessageType.ERROR);
             return;
-        }
-
-        // 第三步：验证通过后，先进行文件更新检查
-        LOG.info("账户验证完成，开始文件更新检查");
-
-        // 第三步：验证通过后，先进行文件更新检查
-        LOG.info("账户验证完成，开始文件更新检查");
-
-        try {
-            // 检查McPatchClient是否可用
-            Class.forName("mcpatch.McPatchClient");
-
-            LOG.info("开始调用McPatchClient进行文件更新检查...");
-
-            // 直接调用McPatchClient的modloader方法
-            // 参数：enableLogFile=true, disableTheme=false
-            boolean hasUpdates = McPatchClient.modloader(true, false);
-
-            if (hasUpdates) {
-                LOG.info("文件更新完成");
-            } else {
-                LOG.info("文件已是最新版本");
-            }
-
-        } catch (ClassNotFoundException e) {
-            LOG.info("McPatchClient不可用，跳过文件更新检查");
-        } catch (Exception e) {
-            LOG.warning("文件更新检查失败，但游戏仍将继续启动: " + e.getMessage(), e);
-
-            // 使用正确的确认对话框方式
-            Controllers.dialog(new MessageDialogPane.Builder("更新检查失败",
-                    "文件更新检查失败: " + e.getMessage() + "\n\n是否继续启动游戏？",
-                    MessageDialogPane.MessageType.QUESTION)
-                    .addAction(i18n("button.yes"), () -> {
-                        // 用户选择继续启动游戏
-
-                    })
-                    .addAction(i18n("button.no"), () -> {
-                        // 用户选择取消启动
-                        LOG.info("用户选择取消启动");
-                        return; // 等待用户选择，不继续执行后续代码
-                    })
-                    .build());
         }
 
         // 验证通过，创建账户然后启动游戏

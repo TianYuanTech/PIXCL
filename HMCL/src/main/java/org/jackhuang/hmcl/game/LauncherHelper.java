@@ -19,30 +19,40 @@ package org.jackhuang.hmcl.game;
 
 import com.jfoenix.controls.JFXButton;
 import javafx.stage.Stage;
+import mcpatch.McPatchClient;
 import org.jackhuang.hmcl.Launcher;
-import org.jackhuang.hmcl.auth.*;
-import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorDownloadException;
+import org.jackhuang.hmcl.auth.Account;
+import org.jackhuang.hmcl.auth.AuthInfo;
+import org.jackhuang.hmcl.auth.AuthenticationException;
+import org.jackhuang.hmcl.auth.CredentialExpiredException;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.DownloadProvider;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.download.MaintainTask;
-import org.jackhuang.hmcl.download.game.*;
+import org.jackhuang.hmcl.download.game.GameLibrariesTask;
+import org.jackhuang.hmcl.download.game.GameVerificationFixTask;
+import org.jackhuang.hmcl.download.game.LibraryDownloadException;
+import org.jackhuang.hmcl.download.game.LibraryDownloadTask;
 import org.jackhuang.hmcl.java.JavaManager;
 import org.jackhuang.hmcl.java.JavaRuntime;
-import org.jackhuang.hmcl.launch.*;
+import org.jackhuang.hmcl.launch.NotDecompressingNativesException;
+import org.jackhuang.hmcl.launch.PermissionException;
+import org.jackhuang.hmcl.launch.ProcessCreationException;
+import org.jackhuang.hmcl.launch.ProcessListener;
 import org.jackhuang.hmcl.mod.ModpackCompletionException;
 import org.jackhuang.hmcl.mod.ModpackConfiguration;
 import org.jackhuang.hmcl.mod.ModpackProvider;
 import org.jackhuang.hmcl.setting.*;
-import org.jackhuang.hmcl.task.*;
+import org.jackhuang.hmcl.task.Schedulers;
+import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.task.TaskExecutor;
+import org.jackhuang.hmcl.task.TaskListener;
 import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
-import org.jackhuang.hmcl.ui.construct.PromptDialogPane;
 import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
 import org.jackhuang.hmcl.util.*;
-import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.ResponseCodeException;
 import org.jackhuang.hmcl.util.platform.*;
@@ -52,9 +62,7 @@ import org.jackhuang.hmcl.util.versioning.VersionNumber;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.net.URL;
-import java.nio.file.AccessDeniedException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -127,8 +135,8 @@ public final class LauncherHelper {
     // 在LauncherHelper.java中添加以下方法和修改
 
     /**
-     * @description: 在launch0方法中添加配置文件更新逻辑
-     * 在用户登录成功后，游戏启动前更新PixelLiveGame.json
+     * @description: 启动流程的核心方法，添加了McPatchClient文件更新检查
+     * 在Java环境检查之前先进行文件更新操作
      */
     private void launch0() {
         HMCLGameRepository repository = profile.getRepository();
@@ -142,7 +150,11 @@ public final class LauncherHelper {
 
         AtomicReference<JavaRuntime> javaVersionRef = new AtomicReference<>();
 
-        TaskExecutor executor = checkGameState(profile, setting, version.get())
+        // 创建McPatchClient文件更新任务
+        Task<Void> mcPatchTask = createMcPatchTask();
+
+        TaskExecutor executor = mcPatchTask
+                .thenComposeAsync(() -> checkGameState(profile, setting, version.get()))
                 .thenComposeAsync(java -> {
                     javaVersionRef.set(Objects.requireNonNull(java));
                     version.set(NativePatcher.patchNative(repository, version.get(), gameVersion.orElse(null), java, setting, javaArguments));
@@ -237,6 +249,7 @@ public final class LauncherHelper {
                         () -> launchingLatch.getCount() == 0, 6.95
                 ).withStage("launch.state.waiting_launching"))
                 .withStagesHint(Lang.immutableListOf(
+                        "launch.state.files_updating",  // 新增的文件更新阶段
                         "launch.state.java",
                         "launch.state.dependencies",
                         "launch.state.logging_in",
@@ -264,6 +277,43 @@ public final class LauncherHelper {
         });
 
         executor.start();
+    }
+
+    /**
+     * @description: 创建McPatchClient文件更新任务
+     * @return Task<Void> - 文件更新任务
+     */
+    private Task<Void> createMcPatchTask() {
+        return Task.runAsync(() -> {
+            try {
+                LOG.info("开始文件更新检查...");
+
+                // 检查McPatchClient是否可用
+                Class.forName("mcpatch.McPatchClient");
+
+                LOG.info("调用McPatchClient进行文件更新...");
+
+                // 调用McPatchClient的modloader方法
+                // 参数：enableLogFile=true, disableTheme=true
+                boolean hasUpdates = McPatchClient.modloader(true, true);
+
+                if (hasUpdates) {
+                    LOG.info("文件更新完成，发现并应用了更新");
+                } else {
+                    LOG.info("文件检查完成，已是最新版本");
+                }
+
+            } catch (ClassNotFoundException e) {
+                LOG.info("McPatchClient不可用，跳过文件更新检查");
+                // 这里不抛出异常，允许游戏继续启动
+
+            } catch (Exception e) {
+                LOG.warning("文件更新过程中发生错误: " + e.getMessage(), e);
+
+                // 记录错误但不中断启动流程
+                // 如果需要中断启动，可以抛出异常：throw new RuntimeException("文件更新失败", e);
+            }
+        }).withStage("launch.state.files_updating");
     }
 
     /**

@@ -17,7 +17,6 @@ version = gitTagName?.run { getVersionName(this) } ?: debugVersion
 plugins {
     kotlin("jvm") version "1.7.20"
     id("com.github.johnrengelman.shadow") version "7.1.2"
-    // 注意：不需要单独应用java和maven-publish插件，父项目已经配置了
 }
 
 repositories {
