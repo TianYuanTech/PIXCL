@@ -1,9 +1,129 @@
 package mcpatch.config
 
+import mcpatch.logging.Log
+import mcpatch.util.File2
+
 /**
  * @description: 硬编码配置类，包含项目的所有配置信息
  */
 object HardcodedConfig {
+
+    // 海外API切换相关常量
+    private const val KOKUGAI_FILENAME = "kokugai"
+    private const val KOKUGAI_CONTENT = "gaikoku"
+
+    // 服务器地址常量
+    private const val DOMESTIC_SERVER_HOST = "http://api.pixellive.cn"
+    private const val OVERSEAS_SERVER_HOST = "http://tkapi.pixellive.cn"
+
+    /**
+     * @description: 检查是否应该使用海外API
+     * 检查.hmcl文件夹下是否存在名为"kokugai"的文件，且文件内容为"gaikoku"
+     * @return boolean - 如果应该使用海外API返回true，否则返回false
+     */
+    private fun shouldUseOverseasApi(): Boolean {
+        try {
+            // 获取.hmcl目录路径
+            val hmclDirectory = getHmclDirectory()
+            if (hmclDirectory == null) {
+                Log.debug("未找到.hmcl目录，使用国内API")
+                return false
+            }
+
+            val kokugaiFile = hmclDirectory + KOKUGAI_FILENAME
+
+            // 检查文件是否存在
+            if (kokugaiFile.exists.not()) {
+                Log.debug("kokugai文件不存在，使用国内API")
+                return false
+            }
+
+            // 检查是否为普通文件
+            if (kokugaiFile.isFile.not()) {
+                Log.debug("kokugai不是普通文件，使用国内API")
+                return false
+            }
+
+            // 读取文件内容并检查
+            val content = kokugaiFile.content
+            val trimmedContent = content.trim()
+            val useOverseas = KOKUGAI_CONTENT == trimmedContent
+
+            Log.info("检查kokugai文件 - 内容: '$trimmedContent', 使用海外API: $useOverseas")
+            return useOverseas
+
+        } catch (e: Exception) {
+            Log.warn("检查kokugai文件时发生错误: ${e.message}")
+            return false
+        }
+    }
+
+    /**
+     * @description: 获取.hmcl目录路径
+     * @return File2? - .hmcl目录路径，如果找不到返回null
+     */
+    private fun getHmclDirectory(): File2? {
+        try {
+            // 获取当前工作目录
+            val currentDir = File2(System.getProperty("user.dir"))
+
+            // 向上搜索包含.hmcl目录的父目录，最多搜索10层
+            var searchDir = currentDir
+            for (i in 0 until 10) {
+                val hmclDir = searchDir + ".hmcl"
+                if (hmclDir.exists && hmclDir.isDirectory) {
+                    Log.debug("找到.hmcl目录: ${hmclDir.path}")
+                    return hmclDir
+                }
+
+                val parent = searchDir.parent
+                if (parent == null || parent.path == searchDir.path) {
+                    break
+                }
+                searchDir = parent
+            }
+
+            // 如果向上搜索没有找到，尝试一些常见位置
+            val commonLocations = listOf(
+                File2(System.getProperty("user.home")) + ".hmcl",
+                currentDir + ".hmcl",
+                currentDir.parent + ".hmcl"
+            )
+
+            for (location in commonLocations) {
+                if (location.exists && location.isDirectory) {
+                    Log.debug("在常见位置找到.hmcl目录: ${location.path}")
+                    return location
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.warn("搜索.hmcl目录时发生错误: ${e.message}")
+        }
+
+        return null
+    }
+
+    /**
+     * @description: 生成服务器地址列表
+     * 根据kokugai文件决定使用国内还是海外服务器
+     * @return List<String> - 服务器地址列表
+     */
+    private fun generateServerUrls(): List<String> {
+        val useOverseas = shouldUseOverseasApi()
+        val serverHost = if (useOverseas) {
+            Log.info("使用海外服务器: $OVERSEAS_SERVER_HOST")
+            OVERSEAS_SERVER_HOST
+        } else {
+            Log.info("使用国内服务器: $DOMESTIC_SERVER_HOST")
+            DOMESTIC_SERVER_HOST
+        }
+
+        // 生成端口范围6701-6710的服务器列表
+        return (6701..6710).map { port ->
+            "$serverHost:$port"
+        }
+    }
 
     /**
      * @description: 获取完整的项目配置信息
@@ -11,19 +131,8 @@ object HardcodedConfig {
      */
     fun getConfig(): Map<String, Any> {
         return mapOf(
-            // 服务器配置 - 多个备用更新源
-            "server" to listOf(
-                "http://api.pixellive.cn:6701",
-                "http://api.pixellive.cn:6702",
-                "http://api.pixellive.cn:6703",
-                "http://api.pixellive.cn:6704",
-                "http://api.pixellive.cn:6705",
-                "http://api.pixellive.cn:6706",
-                "http://api.pixellive.cn:6707",
-                "http://api.pixellive.cn:6708",
-                "http://api.pixellive.cn:6709",
-                "http://api.pixellive.cn:6710"
-            ),
+            // 服务器配置 - 动态生成的服务器地址列表
+            "server" to generateServerUrls(),
 
             // 界面主题配置
             "disable-theme" to false,
@@ -106,6 +215,7 @@ object HardcodedConfig {
     fun getConfigWithCustomServers(serverUrls: List<String>): Map<String, Any> {
         val baseConfig = getConfig().toMutableMap()
         baseConfig["server"] = serverUrls
+        Log.info("使用自定义服务器配置: $serverUrls")
         return baseConfig
     }
 
@@ -141,5 +251,15 @@ object HardcodedConfig {
         baseConfig["retry-times"] = 8 // 增加重试次数
 
         return baseConfig
+    }
+
+    /**
+     * @description: 手动刷新服务器配置
+     * 当用户动态修改kokugai文件后，可以调用此方法重新生成配置
+     * @return 刷新后的配置Map
+     */
+    fun refreshConfig(): Map<String, Any> {
+        Log.info("手动刷新服务器配置")
+        return getConfig()
     }
 }

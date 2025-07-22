@@ -1,5 +1,3 @@
-// 文件：ConfigHolder.java
-// 路径：HMCL/src/main/java/org/jackhuang/hmcl/setting/ConfigHolder.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -51,6 +49,10 @@ public final class ConfigHolder {
     public static final String CONFIG_FILENAME = "hmcl.json";
     public static final String CONFIG_FILENAME_LINUX = ".hmcl.json";
     public static final Path GLOBAL_CONFIG_PATH = Metadata.HMCL_GLOBAL_DIRECTORY.resolve("config.json");
+
+    // 海外API切换相关常量
+    public static final String KOKUGAI_FILENAME = "kokugai";
+    public static final String KOKUGAI_CONTENT = "gaikoku";
 
     private static Path configLocation;
     private static Config configInstance;
@@ -104,6 +106,45 @@ public final class ConfigHolder {
      */
     public static boolean isOwnerChanged() {
         return ownerChanged;
+    }
+
+    /**
+     * @description: 检查是否应该使用海外API
+     * 检查.hmcl文件夹下是否存在名为"kokugai"的文件，且文件内容为"gaikoku"
+     * @return boolean - 如果应该使用海外API返回true，否则返回false
+     */
+    public static boolean shouldUseOverseasApi() {
+        try {
+            // 获取.hmcl目录路径
+            Path hmclDirectory = Metadata.HMCL_CURRENT_DIRECTORY;
+            Path kokugaiFile = hmclDirectory.resolve(KOKUGAI_FILENAME);
+
+            // 检查文件是否存在
+            if (!Files.exists(kokugaiFile)) {
+                return false;
+            }
+
+            // 检查是否为普通文件（不是目录）
+            if (!Files.isRegularFile(kokugaiFile)) {
+                return false;
+            }
+
+            // 读取文件内容并检查
+            String content = FileUtils.readText(kokugaiFile);
+            if (content == null) {
+                return false;
+            }
+
+            // 去除前后空白字符后比较内容
+            return KOKUGAI_CONTENT.equals(content.trim());
+
+        } catch (IOException e) {
+            LOG.warning("Failed to read kokugai file: " + e.getMessage());
+            return false;
+        } catch (Exception e) {
+            LOG.warning("Unexpected error during kokugai file check: " + e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -302,5 +343,4 @@ public final class ConfigHolder {
         LOG.info("Creating an empty global config");
         return new GlobalConfig();
     }
-
 }

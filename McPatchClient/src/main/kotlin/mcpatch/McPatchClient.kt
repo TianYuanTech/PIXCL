@@ -30,7 +30,7 @@ class McPatchClient
      * McPatchClient主逻辑
      * @param graphicsMode 是否以图形模式启动（桌面环境通常以图形模式启动，安卓环境通常不以图形模式启动）
      * @param hasStandaloneProgress 程序是否拥有独立的进程。从JavaAgent参数启动没有独立进程，双击启动有独立进程（java -jar xx.jar也属于独立启动）
-     * @param externalConfigFile 可选的外部配置文件路径，如果为空则使用 progDir/mc-patch-config.yml 或者 progDir/config.yml
+     * @param externalConfigFile 可选的外部配置文件路径，如果为空则使用硬编码配置
      * @param enableLogFile 是否写入日志文件
      * @param disableTheme 是否禁用主题，此选项和配置文件中的选项任意一个为true都会禁用主题
      */
@@ -44,7 +44,9 @@ class McPatchClient
         try {
             val workDir = getWorkDirectory()
             val progDir = getProgramDirectory(workDir)
-            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile ?: (progDir + "mc-patch-config.yml"), progDir + "config.yml"))
+
+            // 使用硬编码配置，动态检测服务器地址
+            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir))
             val updateDir = getUpdateDirectory(workDir, options)
 
             // 初始化日志系统
@@ -54,9 +56,9 @@ class McPatchClient
             }
 
             val consoleLogLevel = if (Environment.IsProduction)
-                    (if (graphicsMode || !enableLogFile) Log.LogLevel.DEBUG else Log.LogLevel.INFO)
-                else
-                    Log.LogLevel.DEBUG
+                (if (graphicsMode || !enableLogFile) Log.LogLevel.DEBUG else Log.LogLevel.INFO)
+            else
+                Log.LogLevel.DEBUG
             Log.addHandler(ConsoleHandler(Log, consoleLogLevel))
             if (!hasStandaloneProgress)
                 Log.openTag("McPatchClient")
@@ -76,6 +78,13 @@ class McPatchClient
             Log.info("Application Version:  ${Environment.Version} (${Environment.GitCommit})")
             Log.info("Java virtual Machine: $jvmVender $jvmVersion")
             Log.info("Operating System: $osName $osVersion $osArch")
+
+            // 记录服务器配置信息
+            val serverList = options.server
+            Log.info("Server Configuration: ${serverList.size} servers configured")
+            serverList.forEachIndexed { index, server ->
+                Log.info("  Server ${index + 1}: $server")
+            }
 
             Localization.init(readLangs())
 
@@ -222,23 +231,23 @@ class McPatchClient
     }
 
     /**
-     * @description: 获取硬编码配置信息，不再依赖外部配置文件
+     * @description: 获取硬编码配置信息，根据kokugai文件动态选择服务器
      * @param external1 保留参数以维持方法签名兼容性（已不使用）
-     * @param external2 保留参数以维持方法签名兼容性（已不使用）currentVersionFile
-     * @return 硬编码的配置文件对象
+     * @param workDir 工作目录，用于kokugai文件检测的参考路径
+     * @return 硬编码的配置文件对象，服务器地址根据kokugai文件动态生成
      */
-    fun readConfig(external1: File2, external2: File2): Map<String, Any>
+    fun readConfig(external1: File2?, workDir: File2): Map<String, Any>
     {
         return when {
             // 生产环境使用生产优化配置
             Environment.IsProduction -> {
-                Log.info("使用生产环境硬编码配置")
+                Log.info("使用生产环境硬编码配置，自动检测服务器地址")
                 HardcodedConfig.getProductionConfig()
             }
 
             // 开发环境使用开发调试配置
             else -> {
-                Log.info("使用开发环境硬编码配置")
+                Log.info("使用开发环境硬编码配置，自动检测服务器地址")
                 HardcodedConfig.getDevConfig()
             }
         }
@@ -352,7 +361,9 @@ class McPatchClient
         try {
             val workDir = getWorkDirectory()
             val progDir = getProgramDirectory(workDir)
-            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile ?: (progDir + "mc-patch-config.yml"), progDir + "config.yml"))
+
+            // 使用硬编码配置，动态检测服务器地址
+            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir))
             val updateDir = getUpdateDirectory(workDir, options)
 
             // 初始化日志系统
@@ -373,6 +384,13 @@ class McPatchClient
             Log.info("RAM: " + MiscUtils.convertBytes(Runtime.getRuntime().usedMemory()))
             Log.info("Graphics Mode: $graphicsMode")
             Log.info("Standalone: $hasStandaloneProgress")
+
+            // 记录服务器配置信息
+            val serverList = options.server
+            Log.info("Server Configuration: ${serverList.size} servers configured")
+            serverList.forEachIndexed { index, server ->
+                Log.info("  Server ${index + 1}: $server")
+            }
 
             Localization.init(readLangs())
 

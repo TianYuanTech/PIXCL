@@ -1,5 +1,3 @@
-// 文件：Metadata.java
-// 路径：HMCL/src/main/java/org/jackhuang/hmcl/Metadata.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2021  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -33,7 +31,7 @@ import java.util.EnumSet;
 /**
  * @description: 存储应用程序的元数据信息
  * 该类负责管理应用程序的基本信息、版本信息、URL配置等
- * 并在初始化时根据配置文件动态设置服务器URL
+ * 并在初始化时根据kokugai文件动态设置服务器URL
  */
 public final class Metadata {
     private Metadata() {
@@ -49,17 +47,17 @@ public final class Metadata {
     public static final String TITLE = NAME + " " + VERSION;
     public static final String FULL_TITLE = FULL_NAME + " v" + VERSION;
 
-    // 动态设置的发布URL，根据配置文件中的kokugai字段决定
+    // 动态设置的发布URL，根据kokugai文件决定
     public static final String PUBLISH_URL;
     public static final String TIKTOK_SERVER_URL = "https://tkapi.pixellive.cn";
+    // 服务器URL配置
+    private static final String DEFAULT_PUBLISH_URL = "https://api.pixellive.cn";
     public static final String ABOUT_URL;
     public static final String HMCL_UPDATE_URL;
 
     public static final String DOCS_URL = "https://docs.hmcl.net";
     public static final String CHANGELOG_URL;
     public static final String CONTACT_URL = DOCS_URL + "/help.html";
-    // 服务器URL配置
-    private static final String DEFAULT_PUBLISH_URL = "https://api.pixellive.cn";
     public static final String EULA_URL = DOCS_URL + "/eula/hmcl.html";
     public static final String GROUPS_URL = "https://www.bilibili.com/opus/905435541874409529";
 
@@ -71,9 +69,6 @@ public final class Metadata {
     public static final Path HMCL_GLOBAL_DIRECTORY;
     public static final Path HMCL_CURRENT_DIRECTORY;
     public static final Path DEPENDENCIES_DIRECTORY;
-    // 配置字段常量
-    private static final String KOKUGAI_FIELD = "kokugai";
-    private static final String KOKUGAI_VALUE = "gaikoku";
 
     static {
         // 初始化目录路径
@@ -110,14 +105,14 @@ public final class Metadata {
     }
 
     /**
-     * @description: 根据配置文件中的kokugai字段确定发布URL
-     * 通过ConfigHolder检查配置文件中是否存在kokugai字段且值为"gaikoku"
+     * @description: 根据kokugai文件确定发布URL
+     * 通过ConfigHolder检查.hmcl目录下是否存在名为"kokugai"的文件且内容为"gaikoku"
      * 如果满足条件则使用TIKTOK_SERVER_URL，否则使用默认URL
      * @return String - 确定的发布URL
      */
     private static String determinePublishUrl() {
-        boolean useAlternativeUrl = ConfigHolder.checkConfigField(KOKUGAI_FIELD, KOKUGAI_VALUE);
-        return useAlternativeUrl ? TIKTOK_SERVER_URL : DEFAULT_PUBLISH_URL;
+        boolean useOverseasUrl = ConfigHolder.shouldUseOverseasApi();
+        return useOverseasUrl ? TIKTOK_SERVER_URL : DEFAULT_PUBLISH_URL;
     }
 
     /**
