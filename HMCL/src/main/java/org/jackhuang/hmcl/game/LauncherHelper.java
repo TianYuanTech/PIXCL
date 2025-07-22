@@ -457,6 +457,16 @@ public final class LauncherHelper {
             });
         }
 
+        @Override
+        public void showChangeLogs(String title, String content, int autoCloseSeconds) {
+            javafx.application.Platform.runLater(() -> {
+                if (!task.isCancelled()) {
+                    LOG.info("更新记录: " + title);
+                    LOG.info(content);
+                }
+            });
+        }
+
         /**
          * @description: 解析进度文本，提取有用的显示内容
          */
