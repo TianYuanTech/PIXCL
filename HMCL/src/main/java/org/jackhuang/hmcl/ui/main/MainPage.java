@@ -383,8 +383,8 @@ public final class MainPage extends StackPane implements DecoratorPage {
                 StringUtils.isBlank(inputData.getUsername()) ||
                 StringUtils.isBlank(inputData.getLoginMethod())) {
 
-            Controllers.dialog("请输入用户名并选择登陆方式以创建账户",
-                    "启动失败", MessageDialogPane.MessageType.ERROR);
+            Controllers.dialog(i18n("launch.account.input.required"),
+                    i18n("launch.failed"), MessageDialogPane.MessageType.ERROR);
             return;
         }
 
@@ -393,8 +393,8 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         // 第一步：验证用户名格式
         if (!USERNAME_CHECKER_PATTERN.matcher(username).matches()) {
-            Controllers.dialog("用户名格式不正确，仅支持英文字母丶数字及下划线，且长度不超过16个字符。",
-                    "输入错误", MessageDialogPane.MessageType.ERROR);
+            Controllers.dialog(i18n("launch.username.format.invalid"),
+                    i18n("input.error"), MessageDialogPane.MessageType.ERROR);
             return;
         }
 
@@ -405,13 +405,13 @@ public final class MainPage extends StackPane implements DecoratorPage {
         String liveRoom = null;
         String cardKey = null;
 
-        if ("直播间验证".equals(loginMethod)) {
+        if (i18n("auth.method.live").equals(loginMethod)) {
             String platform = inputData.getPlatform();
             String roomNumber = inputData.getRoomNumber();
 
             if (StringUtils.isBlank(platform) || StringUtils.isBlank(roomNumber)) {
-                Controllers.dialog("请选择直播平台并输入直播间号",
-                        "输入错误", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("launch.live.input.required"),
+                        i18n("input.error"), MessageDialogPane.MessageType.ERROR);
                 return;
             }
 
@@ -424,18 +424,18 @@ public final class MainPage extends StackPane implements DecoratorPage {
                 liveRoom = roomNumber;
                 LOG.info("直播间验证成功");
             } else {
-                Controllers.dialog("直播间验证失败，请检查平台选择和直播间号是否正确，或确认该直播间是否已获得授权",
-                        "验证失败", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("launch.live.verification.failed"),
+                        i18n("verification.failed"), MessageDialogPane.MessageType.ERROR);
                 LOG.info("直播间验证失败");
                 return;
             }
 
-        } else if ("卡密验证".equals(loginMethod)) {
+        } else if (i18n("auth.method.cardkey").equals(loginMethod)) {
             cardKey = inputData.getCardKey();
 
             if (StringUtils.isBlank(cardKey)) {
-                Controllers.dialog("请输入卡密",
-                        "输入错误", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("launch.cardkey.input.required"),
+                        i18n("input.error"), MessageDialogPane.MessageType.ERROR);
                 return;
             }
 
@@ -446,14 +446,14 @@ public final class MainPage extends StackPane implements DecoratorPage {
                 accountMode = "CARD_KEY";
                 LOG.info("卡密验证成功");
             } else {
-                Controllers.dialog("卡密验证失败，请检查卡密是否正确或是否已过期",
-                        "验证失败", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("launch.cardkey.verification.failed"),
+                        i18n("verification.failed"), MessageDialogPane.MessageType.ERROR);
                 LOG.info("卡密验证失败");
                 return;
             }
         } else {
-            Controllers.dialog("请选择登录方式",
-                    "输入错误", MessageDialogPane.MessageType.ERROR);
+            Controllers.dialog(i18n("launch.login.method.required"),
+                    i18n("input.error"), MessageDialogPane.MessageType.ERROR);
             return;
         }
 
@@ -484,7 +484,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
             try {
                 return Accounts.FACTORY_OFFLINE.create(new SimpleCharacterSelector(), username, null, null, additionalData);
             } catch (Exception e) {
-                throw new RuntimeException("创建账户失败: " + e.getMessage(), e);
+                throw new RuntimeException(i18n("account.create.failed.prefix") + e.getMessage(), e);
             }
         });
 
@@ -512,8 +512,8 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
             } catch (Exception e) {
                 LOG.warning("Failed to process account", e);
-                Controllers.dialog("处理账户时发生错误: " + e.getMessage(),
-                        "处理失败", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("account.process.failed.prefix") + e.getMessage(),
+                        i18n("process.failed"), MessageDialogPane.MessageType.ERROR);
             }
         }, exception -> {
             if (exception instanceof NoSelectedCharacterException) {
@@ -521,8 +521,8 @@ public final class MainPage extends StackPane implements DecoratorPage {
                 LOG.info("用户取消了字符选择");
             } else if (!(exception instanceof CancellationException)) {
                 LOG.warning("Failed to create account", exception);
-                Controllers.dialog("创建账户失败: " + Accounts.localizeErrorMessage(exception),
-                        "创建失败", MessageDialogPane.MessageType.ERROR);
+                Controllers.dialog(i18n("account.create.failed.prefix") + Accounts.localizeErrorMessage(exception),
+                        i18n("create.failed"), MessageDialogPane.MessageType.ERROR);
             }
         }).start();
     }

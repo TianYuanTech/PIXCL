@@ -191,7 +191,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 title = "account.create";
             } else {
                 if (accountMode == AccountMode.CARD_KEY) {
-                    title = "卡密模式登录";
+                    title = "account.mode.card.key";
                 } else {
                     title = "account.create." + Accounts.getLoginType(factory);
                 }
@@ -488,24 +488,24 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 if (factory instanceof OfflineAccountFactory) {
                     if (accountMode == AccountMode.OFFLINE) {
                         // 离线模式：显示直播平台选择器
-                        Label lblPlatform = new Label("直播平台");
+                        Label lblPlatform = new Label(i18n("account.live.platform"));
                         setHalignment(lblPlatform, HPos.LEFT);
                         add(lblPlatform, 0, rowIndex);
 
                         cboPlatform = new JFXComboBox<>();
                         cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
-                        cboPlatform.setPromptText("请选择直播平台");
+                        cboPlatform.setPromptText(i18n("account.live.platform.prompt"));
                         cboPlatform.setMaxWidth(Double.MAX_VALUE);
                         add(cboPlatform, 1, rowIndex);
                         rowIndex++;
 
                         // 直播房间号输入框
-                        Label lblRoomNumber = new Label("直播间号");
+                        Label lblRoomNumber = new Label(i18n("account.live.room.number"));
                         setHalignment(lblRoomNumber, HPos.LEFT);
                         add(lblRoomNumber, 0, rowIndex);
 
                         txtRoomNumber = new JFXTextField();
-                        txtRoomNumber.setPromptText("请输入直播间号");
+                        txtRoomNumber.setPromptText(i18n("account.live.room.number.prompt"));
                         txtRoomNumber.setValidators(new RequiredValidator());
                         setValidateWhileTextChanged(txtRoomNumber, true);
                         txtRoomNumber.setOnAction(e -> onAction.run());
@@ -513,12 +513,12 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                         rowIndex++;
                     } else if (accountMode == AccountMode.CARD_KEY) {
                         // 卡密模式：显示卡密输入框
-                        Label lblCardKey = new Label("卡密");
+                        Label lblCardKey = new Label(i18n("account.input.card.key"));
                         setHalignment(lblCardKey, HPos.LEFT);
                         add(lblCardKey, 0, rowIndex);
 
                         txtCardKey = new JFXTextField();
-                        txtCardKey.setPromptText("请输入卡密");
+                        txtCardKey.setPromptText(i18n("account.input.card.key.prompt"));
                         txtCardKey.setValidators(new RequiredValidator());
                         setValidateWhileTextChanged(txtCardKey, true);
                         txtCardKey.setOnAction(e -> onAction.run());

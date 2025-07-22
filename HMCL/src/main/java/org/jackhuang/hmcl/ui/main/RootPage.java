@@ -351,6 +351,17 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         private boolean isUpdatingUsernameSelection = false;
 
         /**
+         * @description: 翻译键常量，便于维护和管理
+         */
+        private static final String USERNAME_PROMPT_KEY = "account.input.username.prompt";
+        private static final String LOGIN_METHOD_KEY = "account.input.login.method";
+        private static final String LIVE_VERIFICATION_KEY = "account.input.live.verification";
+        private static final String CARD_KEY_VERIFICATION_KEY = "account.input.card.key.verification";
+        private static final String PLATFORM_KEY = "account.input.platform";
+        private static final String ROOM_NUMBER_KEY = "account.input.room.number";
+        private static final String CARD_KEY_INPUT_KEY = "account.input.card.key";
+
+        /**
          * @description: 构造函数，创建账户输入控件并设置默认值
          */
         public AccountInputControls() {
@@ -360,7 +371,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             // 用户名输入组合框（可编辑）
             cboUsername = new JFXComboBox<>();
             cboUsername.setEditable(true);
-            cboUsername.setPromptText("请输入或选择用户名");
+            cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY));
             cboUsername.setPrefWidth(310);
             cboUsername.setMaxWidth(310);
 
@@ -379,27 +390,27 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 if (!newValue) {
                     String editorText = cboUsername.getEditor().getText();
                     if ((editorText == null || editorText.trim().isEmpty()) && cboUsername.getValue() == null) {
-                        Platform.runLater(() -> cboUsername.setPromptText("请输入或选择用户名"));
+                        Platform.runLater(() -> cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY)));
                     }
                 }
             });
 
             // 登录方式选择器
             cboLoginMethod = new JFXComboBox<>();
-            cboLoginMethod.getItems().addAll("直播间验证", "卡密验证");
-            cboLoginMethod.setPromptText("登录方式");
+            cboLoginMethod.getItems().addAll(i18n(LIVE_VERIFICATION_KEY), i18n(CARD_KEY_VERIFICATION_KEY));
+            cboLoginMethod.setPromptText(i18n(LOGIN_METHOD_KEY));
             cboLoginMethod.setPrefWidth(310);
             cboLoginMethod.setMaxWidth(310);
 
             // 直播平台选择器
             cboPlatform = new JFXComboBox<>();
             cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
-            cboPlatform.setPromptText("平台");
+            cboPlatform.setPromptText(i18n(PLATFORM_KEY));
             cboPlatform.setPrefWidth(100);
 
             // 直播间号输入框
             txtRoomNumber = new JFXTextField();
-            txtRoomNumber.setPromptText("直播间号");
+            txtRoomNumber.setPromptText(i18n(ROOM_NUMBER_KEY));
             txtRoomNumber.setValidators(new RequiredValidator());
             txtRoomNumber.setPrefWidth(205);
             setValidateWhileTextChanged(txtRoomNumber, true);
@@ -412,7 +423,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
             // 卡密输入框
             txtCardKey = new JFXTextField();
-            txtCardKey.setPromptText("卡密");
+            txtCardKey.setPromptText(i18n(CARD_KEY_INPUT_KEY));
             txtCardKey.setValidators(new RequiredValidator());
             txtCardKey.setPrefWidth(310);
             setValidateWhileTextChanged(txtCardKey, true);
@@ -450,9 +461,9 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                     String loginMethod = cboLoginMethod.getValue();
                     if (loginMethod == null) return false;
 
-                    if ("直播间验证".equals(loginMethod)) {
+                    if (i18n(LIVE_VERIFICATION_KEY).equals(loginMethod)) {
                         return cboPlatform.getValue() != null && txtRoomNumber.validate();
-                    } else if ("卡密验证".equals(loginMethod)) {
+                    } else if (i18n(CARD_KEY_VERIFICATION_KEY).equals(loginMethod)) {
                         return txtCardKey.validate();
                     }
 
@@ -485,7 +496,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          * @description: 设置默认状态
          */
         private void setDefaultState() {
-            cboLoginMethod.setValue("直播间验证");
+            cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
             // updateLoginMethodVisibility 会通过监听器自动调用
         }
 
@@ -626,7 +637,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
                 if ("LIVE".equals(accountMode) && liveType != null && liveRoom != null) {
                     // 设置为直播间验证模式
-                    cboLoginMethod.setValue("直播间验证");
+                    cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
                     cboPlatform.setValue(liveType);
                     txtRoomNumber.setText(liveRoom);
 
@@ -634,21 +645,21 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
                 } else if ("CARD_KEY".equals(accountMode) && cardKey != null) {
                     // 设置为卡密验证模式
-                    cboLoginMethod.setValue("卡密验证");
+                    cboLoginMethod.setValue(i18n(CARD_KEY_VERIFICATION_KEY));
                     txtCardKey.setText(cardKey);
 
                     LOG.info("自动填充卡密验证数据");
 
                 } else {
                     // 未知模式或数据不完整，清空相关字段
-                    cboLoginMethod.setValue("直播间验证");
+                    cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
                     clearModeSpecificFields();
 
                     LOG.info("账户模式未知或数据不完整，清空模式相关字段");
                 }
             } else {
                 // 非离线账户，只填充用户名，其他字段清空
-                cboLoginMethod.setValue("直播间验证");
+                cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
                 clearModeSpecificFields();
 
                 LOG.info("非离线账户，仅填充用户名: " + account.getUsername());
@@ -665,11 +676,11 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 cboUsername.setValue(null);
                 cboUsername.getEditor().clear();
                 // 重新设置promptText确保正确显示
-                cboUsername.setPromptText("请输入或选择用户名");
+                cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY));
                 isUpdatingUsernameSelection = false;
             });
 
-            cboLoginMethod.setValue("直播间验证");
+            cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
             clearModeSpecificFields();
         }
 
@@ -687,12 +698,12 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          * @param loginMethod 登录方式
          */
         private void updateLoginMethodVisibility(String loginMethod) {
-            if ("直播间验证".equals(loginMethod)) {
+            if (i18n(LIVE_VERIFICATION_KEY).equals(loginMethod)) {
                 liveContainer.setVisible(true);
                 liveContainer.setManaged(true);
                 cardKeyContainer.setVisible(false);
                 cardKeyContainer.setManaged(false);
-            } else if ("卡密验证".equals(loginMethod)) {
+            } else if (i18n(CARD_KEY_VERIFICATION_KEY).equals(loginMethod)) {
                 liveContainer.setVisible(false);
                 liveContainer.setManaged(false);
                 cardKeyContainer.setVisible(true);

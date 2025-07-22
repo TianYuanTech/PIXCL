@@ -130,8 +130,6 @@ public final class LauncherHelper {
         launch();
     }
 
-    // 在LauncherHelper.java中添加以下方法和修改
-
     /**
      * @description: 启动流程的核心方法，将McPatchClient文件更新检查集成到任务链开始位置
      */
@@ -273,8 +271,6 @@ public final class LauncherHelper {
         executor.start();
     }
 
-    // 文件：LauncherHelper.java - 修改McPatch相关部分
-
     /**
      * @description: 创建支持取消操作的McPatch文件更新任务
      */
@@ -292,7 +288,7 @@ public final class LauncherHelper {
 
         public McPatchTask() {
             setStage("launch.state.files_updating");
-            setName("检查游戏文件更新");
+            setName(i18n("mcpatch.task.name"));
             setSignificance(TaskSignificance.MAJOR);
         }
 
@@ -300,7 +296,7 @@ public final class LauncherHelper {
         public void execute() throws Exception {
             try {
                 LOG.info("开始文件更新检查");
-                updateMessage("正在连接更新服务器...");
+                updateMessage(i18n("mcpatch.connecting"));
                 updateProgress(0.0);
 
                 // 检查是否已被取消
@@ -348,7 +344,7 @@ public final class LauncherHelper {
                             LOG.info("McPatch任务已被成功取消");
                         }
 
-                        updateMessage("文件更新已取消");
+                        updateMessage(i18n("mcpatch.cancelled"));
                         return;
                     }
 
@@ -357,22 +353,22 @@ public final class LauncherHelper {
 
                 hasUpdates = mcPatchFuture.get();
                 updateProgress(1.0);
-                String resultMessage = hasUpdates ? "文件更新完成" : "文件已是最新版本";
+                String resultMessage = hasUpdates ? i18n("mcpatch.completed") : i18n("mcpatch.up_to_date");
                 updateMessage(resultMessage);
 
                 LOG.info(resultMessage + (hasUpdates ? "，发现并应用了更新" : ""));
 
             } catch (CancellationException | InterruptedException e) {
                 LOG.info("McPatch任务被用户取消");
-                updateMessage("文件更新已取消");
+                updateMessage(i18n("mcpatch.cancelled"));
                 // 不重新抛出异常，让任务优雅结束
             } catch (Exception e) {
                 if (shouldCancel || Thread.currentThread().isInterrupted()) {
                     LOG.info("McPatch任务在取消过程中发生异常: " + e.getMessage());
-                    updateMessage("文件更新已取消");
+                    updateMessage(i18n("mcpatch.cancelled"));
                 } else {
                     LOG.warning("文件更新过程中发生错误: " + e.getMessage(), e);
-                    updateMessage("文件更新失败");
+                    updateMessage(i18n("mcpatch.failed"));
                     throw e;
                 }
             }
@@ -451,7 +447,7 @@ public final class LauncherHelper {
 
         @Override
         public void showCompletionMessage(boolean hasUpdates) {
-            String message = hasUpdates ? "文件更新完成" : "文件已是最新版本";
+            String message = hasUpdates ? i18n("mcpatch.completed") : i18n("mcpatch.up_to_date");
             javafx.application.Platform.runLater(() -> {
                 if (!task.isCancelled()) {
                     LOG.info(message);
@@ -466,7 +462,7 @@ public final class LauncherHelper {
          */
         private String parseProgressText(String text) {
             if (text == null || text.isEmpty()) {
-                return "处理中...";
+                return i18n("mcpatch.processing");
             }
 
             String[] parts = text.split("\\s+-\\s+");
@@ -1152,7 +1148,6 @@ public final class LauncherHelper {
 
             checkExit();
         }
-
     }
 
     public static final Queue<ManagedProcess> PROCESSES = new ConcurrentLinkedQueue<>();

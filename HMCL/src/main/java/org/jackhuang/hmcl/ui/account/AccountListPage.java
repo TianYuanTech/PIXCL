@@ -17,23 +17,17 @@
  */
 package org.jackhuang.hmcl.ui.account;
 
-import com.jfoenix.controls.JFXButton;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.*;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Skin;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorServer;
 import org.jackhuang.hmcl.setting.Accounts;
-import org.jackhuang.hmcl.setting.Theme;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
@@ -41,21 +35,11 @@ import org.jackhuang.hmcl.ui.construct.AdvancedListItem;
 import org.jackhuang.hmcl.ui.construct.ClassTitle;
 import org.jackhuang.hmcl.ui.decorator.DecoratorAnimatedPage;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
-import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
-import org.jackhuang.hmcl.util.platform.NativeUtils;
-import org.jackhuang.hmcl.util.platform.OperatingSystem;
-import org.jackhuang.hmcl.util.platform.windows.Kernel32;
-import org.jackhuang.hmcl.util.platform.windows.WinConstants;
 
-import java.net.URI;
-import java.time.ZoneId;
-import java.util.Arrays;
 import java.util.Locale;
 
-import static org.jackhuang.hmcl.setting.ConfigHolder.globalConfig;
 import static org.jackhuang.hmcl.ui.versions.VersionPage.wrap;
-import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.createSelectedItemPropertyFor;
 
@@ -170,7 +154,7 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
                     AdvancedListItem cardKeyItem = new AdvancedListItem();
                     cardKeyItem.getStyleClass().add("navigation-drawer-item");
                     cardKeyItem.setActionButtonVisible(false);
-                    cardKeyItem.setTitle("卡密用户");
+                    cardKeyItem.setTitle(i18n("account.methods.card.key"));
                     cardKeyItem.setLeftGraphic(wrap(SVG.EDIT));
                     cardKeyItem.setOnAction(e -> Controllers.dialog(new CreateAccountPane(Accounts.FACTORY_OFFLINE, CreateAccountPane.AccountMode.CARD_KEY)));
 
