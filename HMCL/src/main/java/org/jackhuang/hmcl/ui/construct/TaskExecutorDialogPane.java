@@ -48,7 +48,7 @@ public class TaskExecutorDialogPane extends BorderPane {
     private final Label lblTitle;
     private final Label lblProgress;
     private final JFXButton btnCancel;
-    private final TaskListPane taskListPane;
+    public final TaskListPane taskListPane;
 
     public TaskExecutorDialogPane(@NotNull TaskCancellationAction cancel) {
         FXUtils.setLimitWidth(this, 500);

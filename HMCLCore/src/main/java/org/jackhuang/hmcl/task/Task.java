@@ -72,7 +72,7 @@ public abstract class Task<T> {
         this.cancelled = cancelled;
     }
 
-    protected final boolean isCancelled() {
+    public final boolean isCancelled() {
         if (Thread.interrupted()) {
             Thread.currentThread().interrupt();
             return true;
@@ -124,7 +124,7 @@ public abstract class Task<T> {
         this.notifyPropertiesChanged = runnable;
     }
 
-    protected void notifyPropertiesChanged() {
+    public void notifyPropertiesChanged() {
         if (notifyPropertiesChanged != null) {
             notifyPropertiesChanged.run();
         }
@@ -342,7 +342,7 @@ public abstract class Task<T> {
         }
     }
 
-    protected void updateProgressImmediately(double progress) {
+    public void updateProgressImmediately(double progress) {
         progressUpdate.accept(progress);
     }
 
@@ -353,7 +353,7 @@ public abstract class Task<T> {
         return message.getReadOnlyProperty();
     }
 
-    protected final void updateMessage(String newMessage) {
+    public final void updateMessage(String newMessage) {
         messageUpdate.accept(newMessage);
     }
 

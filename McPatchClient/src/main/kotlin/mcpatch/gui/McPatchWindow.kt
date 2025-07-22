@@ -25,7 +25,7 @@ class McPatchWindow(width: Int = 350, height: Int = 140)
         window.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
         window.setLocationRelativeTo(null)
         window.isResizable = false
-//        window.isAlwaysOnTop = true
+        window.isAlwaysOnTop = true
 
         window.addWindowListener(object : WindowAdapter() {
             override fun windowClosing(e: WindowEvent?) {

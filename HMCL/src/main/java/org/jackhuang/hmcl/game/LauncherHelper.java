@@ -20,6 +20,7 @@ package org.jackhuang.hmcl.game;
 import com.jfoenix.controls.JFXButton;
 import javafx.stage.Stage;
 import mcpatch.McPatchClient;
+import mcpatch.callback.ProgressCallback;
 import org.jackhuang.hmcl.Launcher;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.AuthInfo;
@@ -43,15 +44,13 @@ import org.jackhuang.hmcl.mod.ModpackCompletionException;
 import org.jackhuang.hmcl.mod.ModpackConfiguration;
 import org.jackhuang.hmcl.mod.ModpackProvider;
 import org.jackhuang.hmcl.setting.*;
-import org.jackhuang.hmcl.task.Schedulers;
-import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.task.TaskExecutor;
-import org.jackhuang.hmcl.task.TaskListener;
+import org.jackhuang.hmcl.task.*;
 import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
+import org.jackhuang.hmcl.ui.construct.TaskListPane;
 import org.jackhuang.hmcl.util.*;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.ResponseCodeException;
@@ -248,12 +247,14 @@ public final class LauncherHelper {
                         i18n("message.doing"),
                         () -> launchingLatch.getCount() == 0, 6.95
                 ).withStage("launch.state.waiting_launching"))
+                // 文件：LauncherHelper.java - 修改launch0()方法中的阶段提示部分
+
                 .withStagesHint(Lang.immutableListOf(
-                        "launch.state.files_updating",  // 新增的文件更新阶段
-                        "launch.state.java",
-                        "launch.state.dependencies",
-                        "launch.state.logging_in",
-                        "launch.state.waiting_launching"))
+                        "launch.state.files_updating",    // 文件更新阶段
+                        "launch.state.java",              // Java环境检查
+                        "launch.state.dependencies",      // 依赖处理
+                        "launch.state.logging_in",        // 登录验证
+                        "launch.state.waiting_launching")) // 等待启动
                 .executor();
 
         launchingStepsPane.setExecutor(executor, false);
@@ -279,41 +280,210 @@ public final class LauncherHelper {
         executor.start();
     }
 
+    // 文件：LauncherHelper.java - 修改McPatch相关部分
+
     /**
-     * @description: 创建McPatchClient文件更新任务
-     * @return Task<Void> - 文件更新任务
+     * @description: 创建集成到HMCL任务系统的McPatch文件更新任务
      */
     private Task<Void> createMcPatchTask() {
-        return Task.runAsync(() -> {
+        return new McPatchTask();
+    }
+
+    // 在LauncherHelper类中添加字段访问
+    private TaskListPane getTaskListPane() {
+        try {
+            java.lang.reflect.Field taskListPaneField = TaskExecutorDialogPane.class.getDeclaredField("taskListPane");
+            taskListPaneField.setAccessible(true);
+            return (TaskListPane) taskListPaneField.get(launchingStepsPane);
+        } catch (Exception e) {
+            LOG.debug("无法访问TaskListPane: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * @description: 简化的McPatch任务实现
+     */
+    private class McPatchTask extends Task<Void> {
+
+        public McPatchTask() {
+            setStage("launch.state.files_updating");
+            setName("检查游戏文件更新");
+            setSignificance(TaskSignificance.MAJOR);
+        }
+
+        @Override
+        public void execute() throws Exception {
             try {
-                LOG.info("开始文件更新检查...");
+                LOG.info("开始文件更新检查");
+                updateMessage("正在连接更新服务器...");
+                updateProgress(0.0);
 
-                // 检查McPatchClient是否可用
-                Class.forName("mcpatch.McPatchClient");
+                McPatchProgressCallback progressCallback = new McPatchProgressCallback(this);
+                boolean hasUpdates = McPatchClient.modloaderWithProgress(true, true, progressCallback);
 
-                LOG.info("调用McPatchClient进行文件更新...");
+                updateProgress(1.0);
+                String resultMessage = hasUpdates ? "文件更新完成" : "文件已是最新版本";
+                updateMessage(resultMessage);
 
-                // 调用McPatchClient的modloader方法
-                // 参数：enableLogFile=true, disableTheme=true
-                boolean hasUpdates = McPatchClient.modloader(true, true);
-
-                if (hasUpdates) {
-                    LOG.info("文件更新完成，发现并应用了更新");
-                } else {
-                    LOG.info("文件检查完成，已是最新版本");
-                }
-
-            } catch (ClassNotFoundException e) {
-                LOG.info("McPatchClient不可用，跳过文件更新检查");
-                // 这里不抛出异常，允许游戏继续启动
+                LOG.info(resultMessage + (hasUpdates ? "，发现并应用了更新" : ""));
 
             } catch (Exception e) {
                 LOG.warning("文件更新过程中发生错误: " + e.getMessage(), e);
-
-                // 记录错误但不中断启动流程
-                // 如果需要中断启动，可以抛出异常：throw new RuntimeException("文件更新失败", e);
+                updateMessage("文件更新失败");
+                throw e;
             }
-        }).withStage("launch.state.files_updating");
+        }
+
+        @Override
+        public Collection<Task<?>> getDependents() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public Collection<Task<?>> getDependencies() {
+            return Collections.emptySet();
+        }
+    }
+
+    /**
+     * @description: 简化的McPatch进度回调实现
+     */
+    private class McPatchProgressCallback implements ProgressCallback {
+
+        private final McPatchTask task;
+
+        public McPatchProgressCallback(McPatchTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public void updateTitle(String title) {
+            javafx.application.Platform.runLater(() -> {
+                LOG.info("McPatch标题: " + title);
+                task.updateMessage(title);
+            });
+        }
+
+        @Override
+        public void updateLabel(String label) {
+            javafx.application.Platform.runLater(() -> {
+                LOG.info("McPatch状态: " + label);
+                task.updateMessage(label);
+            });
+        }
+
+        @Override
+        public void updateProgress(String text, int value) {
+            javafx.application.Platform.runLater(() -> {
+                double progress = value / 1000.0;
+
+                // 解析McPatch的进度文本并提取有用信息
+                String displayText = parseProgressText(text);
+
+                // 更新任务消息（右边显示）
+                task.updateMessage(displayText);
+
+                // 更新进度条
+                task.updateProgressImmediately(progress);
+
+                // 提取并触发速度事件
+                String speedText = extractSpeedFromText(text);
+                if (!speedText.isEmpty()) {
+                    triggerSpeedEvent(speedText);
+                }
+            });
+        }
+
+        @Override
+        public boolean shouldInterrupt() {
+            return Thread.currentThread().isInterrupted() || task.isCancelled();
+        }
+
+        @Override
+        public void showCompletionMessage(boolean hasUpdates) {
+            String message = hasUpdates ? "文件更新完成" : "文件已是最新版本";
+            javafx.application.Platform.runLater(() -> {
+                LOG.info(message);
+                task.updateMessage(message);
+                triggerSpeedEvent(""); // 清空速度显示
+            });
+        }
+
+        /**
+         * @description: 解析进度文本，提取显示内容
+         */
+        private String parseProgressText(String text) {
+            if (text == null || text.isEmpty()) {
+                return "处理中...";
+            }
+
+            // 提取文件名或关键信息
+            String[] parts = text.split("\\s+-\\s+");
+            if (parts.length >= 2) {
+                return parts[0] + " - " + parts[1]; // 进度 + 文件大小信息
+            }
+
+            return text.length() > 50 ? text.substring(0, 47) + "..." : text;
+        }
+
+        /**
+         * @description: 从进度文本中提取速度信息
+         */
+        private String extractSpeedFromText(String text) {
+            if (text == null || !text.contains("/s")) {
+                return "";
+            }
+
+            String[] parts = text.split("\\s+-\\s+");
+            for (String part : parts) {
+                if (part.trim().endsWith("/s")) {
+                    return part.trim();
+                }
+            }
+
+            return "";
+        }
+
+        /**
+         * @description: 触发速度事件以更新左下角显示
+         */
+        private void triggerSpeedEvent(String speedText) {
+            try {
+                int speedValue = parseSpeedValue(speedText);
+                FetchTask.speedEvent.channel(FetchTask.SpeedEvent.class)
+                        .fireEvent(new FetchTask.SpeedEvent(this, speedValue));
+            } catch (Exception e) {
+                LOG.debug("触发速度事件时发生错误: " + e.getMessage());
+            }
+        }
+
+        /**
+         * @description: 解析速度文本为字节数值
+         */
+        private int parseSpeedValue(String speedText) {
+            if (speedText == null || speedText.isEmpty()) {
+                return 0;
+            }
+
+            try {
+                String cleanText = speedText.replace("/s", "").trim().toLowerCase();
+
+                if (cleanText.endsWith("mib") || cleanText.endsWith("mb")) {
+                    double value = Double.parseDouble(cleanText.replaceAll("(mib|mb)", ""));
+                    return (int) (value * 1024 * 1024);
+                } else if (cleanText.endsWith("kib") || cleanText.endsWith("kb")) {
+                    double value = Double.parseDouble(cleanText.replaceAll("(kib|kb)", ""));
+                    return (int) (value * 1024);
+                } else if (cleanText.endsWith("b")) {
+                    return (int) Double.parseDouble(cleanText.replace("b", ""));
+                }
+            } catch (NumberFormatException e) {
+                LOG.debug("解析速度值失败: " + speedText);
+            }
+
+            return 0;
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package mcpatch
 
 import com.github.kasuminova.GUI.SetupSwing
+import mcpatch.callback.ProgressCallback
 import mcpatch.config.HardcodedConfig
 import mcpatch.data.GlobalOptions
 import mcpatch.exception.*
@@ -17,11 +18,8 @@ import mcpatch.util.File2
 import mcpatch.util.MiscUtils
 import org.json.JSONException
 import org.yaml.snakeyaml.Yaml
-import java.awt.Desktop
 import java.io.File
-import java.io.IOException
 import java.io.InterruptedIOException
-import java.lang.instrument.Instrumentation
 import java.nio.channels.ClosedByInterruptException
 import java.util.jar.JarFile
 import kotlin.system.exitProcess
@@ -307,133 +305,141 @@ class McPatchClient
 
     companion object {
         /**
-         * 以独立进程启动
-         */
-        @JvmStatic
-        fun startStandalone(
-            graphicsMode: Boolean,
-            standaloneProgress: Boolean,
-            externalConfigFile: File2?,
-            enableLogFile: Boolean,
-            disableTheme: Boolean
-        ) {
-            val libpath = System.getProperty("java.library.path").split(File.separator).first()
-            val jar = Environment.JarFile!!.platformPath
-
-            fun appendPath(env: MutableMap<String, String>): MutableMap<String, String>
-            {
-                val path = env["PATH"] ?: ""
-                env["PATH"] = path + (if (path.trim().isNotEmpty()) File.separator else "") + libpath
-                return env
-            }
-
-            // 测试是否可以启动独立进程
-            val test = ProcessBuilder("java", "-version")
-            appendPath(test.environment())
-            try {
-                test.start().waitFor()
-            } catch (e: IOException) {
-                throw PermissionDeniedException()
-            }
-
-            val pb = ProcessBuilder("java", "-jar", jar)
-            val env = pb.environment()
-            val path = env["PATH"] ?: ""
-            env["PATH"] = path + (if (path.trim().isNotEmpty()) File.separator else "") + libpath
-            env["MC_PATCH_CLIENT_GRAPHICS_MODE"] = graphicsMode.toString()
-            env["MC_PATCH_CLIENT_STANDALONE"] = standaloneProgress.toString()
-            env["MC_PATCH_CLIENT_EXTERNAL_CONFIG"] = externalConfigFile?.platformPath ?: ""
-            env["MC_PATCH_CLIENT_ENABLE_LOG_FILE"] = enableLogFile.toString()
-            env["MC_PATCH_CLIENT_DISABLE_THEME"] = disableTheme.toString()
-            pb.inheritIO()
-
-            val process = pb.start()
-            val exitCode = process.waitFor()
-            if (exitCode != 0)
-                throw WrappedInstanceException(exitCode)
-        }
-
-        /**
-         * 从JavaAgent启动
-         */
-        @JvmStatic
-        fun premain(agentArgs: String?, ins: Instrumentation?)
-        {
-            val autoUseGraphicsMode = agentArgs != "windowless" && Desktop.isDesktopSupported()
-
-            if (!Environment.IsProduction)
-                throw RuntimeException("McPatchClient must be in production mode to be started in JavaAgent mode")
-
-            val legacyStart = JarFile(Environment.JarFile!!.path).use { jar -> jar.getJarEntry(".no-standalone-process") != null }
-
-            try {
-                if (legacyStart)
-                {
-                    println("Use legacy starting up method")
-                    throw PermissionDeniedException()
-                }
-
-                println("Use standalone process starting up method")
-
-                startStandalone(
-                    graphicsMode = autoUseGraphicsMode,
-                    standaloneProgress = false,
-                    externalConfigFile = null,
-                    enableLogFile = true,
-                    disableTheme = false
-                )
-            } catch (e: PermissionDeniedException) {
-                if (!legacyStart)
-                    println("fail to start McPatchClient using standalone process, fallback to non-standalone mode ...")
-
-                McPatchClient().run(
-                    graphicsMode = autoUseGraphicsMode,
-                    hasStandaloneProgress = false,
-                    externalConfigFile = null,
-                    enableLogFile = true,
-                    disableTheme = false
-                )
-            }
-
-            Log.info("finished!")
-        }
-
-        /**
-         * 独立启动
-         */
-        @JvmStatic
-        fun main(args: Array<String>)
-        {
-            val autoGraphicsMode = !(args.isNotEmpty() && args[0] == "windowless") && Desktop.isDesktopSupported()
-
-            McPatchClient().run(
-                graphicsMode = (System.getenv("MC_PATCH_CLIENT_GRAPHICS_MODE") ?: "").ifEmpty { autoGraphicsMode.toString() } == "true",
-                hasStandaloneProgress = (System.getenv("MC_PATCH_CLIENT_STANDALONE") ?: "true") == "true",
-                externalConfigFile = (System.getenv("MC_PATCH_CLIENT_EXTERNAL_CONFIG") ?: "").run { if (this.isEmpty()) null else File2(this) },
-                enableLogFile = (System.getenv("MC_PATCH_CLIENT_ENABLE_LOG_FILE") ?: "true") == "true",
-                disableTheme = (System.getenv("MC_PATCH_CLIENT_DISABLE_THEME") ?: "false") == "true"
-            )
-
-            Log.info("finished!")
-        }
-
-        /**
-         * 从ModLoader启动
+         * @description: 从ModLoader启动（带进度回调版本）
+         * @param enableLogFile 是否启用日志文件
+         * @param disableTheme 是否禁用主题
+         * @param progressCallback 进度回调接口，用于向HMCL反馈进度信息
          * @return 是否有文件更新，如果有返回true。其它情况返回false
          */
         @JvmStatic
-        fun modloader(enableLogFile: Boolean, disableTheme: Boolean): Boolean
-        {
-            val result = McPatchClient().run(
-                graphicsMode = Desktop.isDesktopSupported(),
+        fun modloaderWithProgress(
+            enableLogFile: Boolean,
+            disableTheme: Boolean,
+            progressCallback: ProgressCallback?
+        ): Boolean {
+            val result = McPatchClient().runWithProgress(
+                graphicsMode = false, // 不使用图形模式，由HMCL控制UI
                 hasStandaloneProgress = false,
                 externalConfigFile = null,
                 enableLogFile = enableLogFile,
-                disableTheme = disableTheme
+                disableTheme = disableTheme,
+                progressCallback = progressCallback
             )
             Log.info("finished!")
             return result
         }
+
+        /**
+         * @description: 原有的modloader方法保持兼容性
+         */
+        @JvmStatic
+        fun modloader(enableLogFile: Boolean, disableTheme: Boolean): Boolean {
+            return modloaderWithProgress(enableLogFile, disableTheme, null)
+        }
+    }
+
+    /**
+     * @description: 带进度回调的运行方法
+     */
+    fun runWithProgress(
+        graphicsMode: Boolean,
+        hasStandaloneProgress: Boolean,
+        externalConfigFile: File2?,
+        enableLogFile: Boolean,
+        disableTheme: Boolean,
+        progressCallback: ProgressCallback?
+    ): Boolean {
+        try {
+            val workDir = getWorkDirectory()
+            val progDir = getProgramDirectory(workDir)
+            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile ?: (progDir + "mc-patch-config.yml"), progDir + "config.yml"))
+            val updateDir = getUpdateDirectory(workDir, options)
+
+            // 初始化日志系统
+            if (enableLogFile) {
+                val logFilePath = getLogFilePath(workDir, progDir, graphicsMode)
+                Log.addHandler(FileHandler(Log, logFilePath))
+            }
+
+            val consoleLogLevel = if (Environment.IsProduction)
+                (if (graphicsMode || !enableLogFile) Log.LogLevel.DEBUG else Log.LogLevel.INFO)
+            else
+                Log.LogLevel.DEBUG
+            Log.addHandler(ConsoleHandler(Log, consoleLogLevel))
+            if (!hasStandaloneProgress)
+                Log.openTag("McPatchClient")
+
+            // 环境信息收集
+            Log.info("RAM: " + MiscUtils.convertBytes(Runtime.getRuntime().usedMemory()))
+            Log.info("Graphics Mode: $graphicsMode")
+            Log.info("Standalone: $hasStandaloneProgress")
+
+            Localization.init(readLangs())
+
+            // 应用主题
+            if (graphicsMode && !disableTheme && !options.disableTheme)
+                SetupSwing.init()
+
+            // 使用进度回调而不是McPatchWindow
+            progressCallback?.updateTitle(Localization[LangNodes.window_title])
+            progressCallback?.updateLabel(Localization[LangNodes.connecting_message])
+
+            // 创建工作线程
+            val workthread = WorkThreadWithCallback(progressCallback, options, updateDir, progDir)
+            var exception: Throwable? = null
+            workthread.isDaemon = true
+            workthread.setUncaughtExceptionHandler { _, e -> exception = e }
+
+            // 启动更新任务
+            workthread.start()
+            workthread.join()
+
+            // 处理工作线程异常
+            if (exception != null) {
+                val ex = exception!!
+
+                if (ex !is InterruptedException &&
+                    ex !is InterruptedIOException &&
+                    ex !is ClosedByInterruptException) {
+
+                    try {
+                        Log.error(ex.javaClass.name)
+                        Log.error(ex.stackTraceToString())
+                    } catch (e: Exception) {
+                        println("------------------------")
+                        println(e.javaClass.name)
+                        println(e.stackTraceToString())
+                    }
+
+                    if (options.noThrowing) {
+                        println("文件更新失败！但因为设置了no-throwing参数，游戏仍会继续运行！\n\n\n")
+                    } else {
+                        throw ex
+                    }
+                } else {
+                    Log.info("updating thread interrupted by user")
+                }
+            } else {
+                progressCallback?.showCompletionMessage(workthread.downloadedVersionCount > 0)
+                return workthread.downloadedVersionCount > 0
+            }
+
+        } catch (e: UpdateDirNotFoundException) {
+            throw e
+        } catch (e: ConfigFileNotFoundException) {
+            throw e
+        } catch (e: FailedToParsingException) {
+            throw e
+        } catch (e: InvalidConfigFileException) {
+            throw e
+        } finally {
+            Log.info("RAM: " + MiscUtils.convertBytes(Runtime.getRuntime().usedMemory()))
+
+            if (hasStandaloneProgress)
+                exitProcess(0)
+        }
+
+        return false
     }
 
     /**
