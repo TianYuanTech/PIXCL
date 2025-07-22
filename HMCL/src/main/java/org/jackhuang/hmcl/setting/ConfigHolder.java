@@ -1,3 +1,5 @@
+// 文件：ConfigHolder.java
+// 路径：HMCL/src/main/java/org/jackhuang/hmcl/setting/ConfigHolder.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -17,7 +19,10 @@
  */
 package org.jackhuang.hmcl.setting;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.util.FileSaver;
 import org.jackhuang.hmcl.util.i18n.I18n;
@@ -26,11 +31,18 @@ import org.jackhuang.hmcl.util.io.JarUtils;
 import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Locale;
 
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
+/**
+ * @description: 配置文件持有者和管理器
+ * 负责配置文件的加载、保存和管理操作
+ */
 public final class ConfigHolder {
 
     private ConfigHolder() {
@@ -46,6 +58,11 @@ public final class ConfigHolder {
     private static boolean newlyCreated;
     private static boolean ownerChanged = false;
 
+    /**
+     * @description: 获取当前配置实例
+     * @return Config - 配置实例
+     * @throws IllegalStateException - 如果配置尚未加载
+     */
     public static Config config() {
         if (configInstance == null) {
             throw new IllegalStateException("Configuration hasn't been loaded");
@@ -53,6 +70,11 @@ public final class ConfigHolder {
         return configInstance;
     }
 
+    /**
+     * @description: 获取全局配置实例
+     * @return GlobalConfig - 全局配置实例
+     * @throws IllegalStateException - 如果配置尚未加载
+     */
     public static GlobalConfig globalConfig() {
         if (globalConfigInstance == null) {
             throw new IllegalStateException("Configuration hasn't been loaded");
@@ -60,18 +82,89 @@ public final class ConfigHolder {
         return globalConfigInstance;
     }
 
+    /**
+     * @description: 获取配置文件位置
+     * @return Path - 配置文件路径
+     */
     public static Path configLocation() {
         return configLocation;
     }
 
+    /**
+     * @description: 检查配置是否为新创建的
+     * @return boolean - 新创建返回true
+     */
     public static boolean isNewlyCreated() {
         return newlyCreated;
     }
 
+    /**
+     * @description: 检查配置文件所有者是否发生变化
+     * @return boolean - 所有者变化返回true
+     */
     public static boolean isOwnerChanged() {
         return ownerChanged;
     }
 
+    /**
+     * @description: 检查配置文件中指定字段的值
+     * 此方法专门用于在应用程序早期初始化阶段检查配置字段
+     * 不依赖于完整的配置加载流程
+     * @param fieldName - 要检查的字段名
+     * @param expectedValue - 期望的字段值
+     * @return boolean - 如果字段存在且值匹配返回true，否则返回false
+     */
+    public static boolean checkConfigField(String fieldName, String expectedValue) {
+        if (fieldName == null || expectedValue == null) {
+            return false;
+        }
+
+        try {
+            Path configPath = locateConfig();
+            if (!Files.exists(configPath)) {
+                return false;
+            }
+
+            String content = FileUtils.readText(configPath);
+            if (content == null || content.trim().isEmpty()) {
+                return false;
+            }
+
+            JsonElement jsonElement = JsonParser.parseString(content);
+            if (!jsonElement.isJsonObject()) {
+                return false;
+            }
+
+            JsonObject jsonObject = jsonElement.getAsJsonObject();
+            if (!jsonObject.has(fieldName)) {
+                return false;
+            }
+
+            JsonElement fieldElement = jsonObject.get(fieldName);
+            if (!fieldElement.isJsonPrimitive()) {
+                return false;
+            }
+
+            String actualValue = fieldElement.getAsString();
+            return expectedValue.equals(actualValue);
+
+        } catch (IOException e) {
+            LOG.warning("Failed to read config file for field check: " + e.getMessage());
+            return false;
+        } catch (JsonParseException e) {
+            LOG.warning("Failed to parse config JSON for field check: " + e.getMessage());
+            return false;
+        } catch (Exception e) {
+            LOG.warning("Unexpected error during config field check: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * @description: 初始化配置系统
+     * 加载配置文件并设置相关的系统配置
+     * @throws IOException - 文件操作失败时抛出异常
+     */
     public static void init() throws IOException {
         if (configInstance != null) {
             throw new IllegalStateException("Configuration is already loaded");
@@ -111,6 +204,11 @@ public final class ConfigHolder {
         }
     }
 
+    /**
+     * @description: 定位配置文件
+     * 按照优先级顺序查找配置文件位置
+     * @return Path - 配置文件路径
+     */
     private static Path locateConfig() {
         Path defaultConfigFile = Metadata.HMCL_CURRENT_DIRECTORY.resolve(CONFIG_FILENAME);
         if (Files.isRegularFile(defaultConfigFile))
@@ -145,6 +243,12 @@ public final class ConfigHolder {
         return defaultConfigFile;
     }
 
+    /**
+     * @description: 加载配置文件
+     * 读取并解析配置文件内容，处理各种异常情况
+     * @return Config - 配置实例
+     * @throws IOException - 文件操作失败时抛出异常
+     */
     private static Config loadConfig() throws IOException {
         if (Files.exists(configLocation)) {
             try {
@@ -174,8 +278,12 @@ public final class ConfigHolder {
         return new Config();
     }
 
-    // Global Config
-
+    /**
+     * @description: 加载全局配置文件
+     * 读取并解析全局配置文件内容
+     * @return GlobalConfig - 全局配置实例
+     * @throws IOException - 文件操作失败时抛出异常
+     */
     private static GlobalConfig loadGlobalConfig() throws IOException {
         if (Files.exists(GLOBAL_CONFIG_PATH)) {
             try {

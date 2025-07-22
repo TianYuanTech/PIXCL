@@ -1,3 +1,5 @@
+// 文件：Metadata.java
+// 路径：HMCL/src/main/java/org/jackhuang/hmcl/Metadata.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2021  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -17,6 +19,7 @@
  */
 package org.jackhuang.hmcl;
 
+import org.jackhuang.hmcl.setting.ConfigHolder;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.io.JarUtils;
 import org.jackhuang.hmcl.util.platform.Architecture;
@@ -28,7 +31,9 @@ import java.nio.file.Paths;
 import java.util.EnumSet;
 
 /**
- * Stores metadata about this application.
+ * @description: 存储应用程序的元数据信息
+ * 该类负责管理应用程序的基本信息、版本信息、URL配置等
+ * 并在初始化时根据配置文件动态设置服务器URL
  */
 public final class Metadata {
     private Metadata() {
@@ -44,15 +49,17 @@ public final class Metadata {
     public static final String TITLE = NAME + " " + VERSION;
     public static final String FULL_TITLE = FULL_NAME + " v" + VERSION;
 
-    public static final String PUBLISH_URL = "https://api.pixellive.cn";
+    // 动态设置的发布URL，根据配置文件中的kokugai字段决定
+    public static final String PUBLISH_URL;
     public static final String TIKTOK_SERVER_URL = "https://tkapi.pixellive.cn";
-    public static final String ABOUT_URL = PUBLISH_URL + "/about";
-    public static final String DOWNLOAD_URL = PUBLISH_URL + "/download";
-    public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", PUBLISH_URL + "/update_link");
+    public static final String ABOUT_URL;
+    public static final String HMCL_UPDATE_URL;
 
     public static final String DOCS_URL = "https://docs.hmcl.net";
-    public static final String CONTACT_URL = PUBLISH_URL + "/help.html";
-    public static final String CHANGELOG_URL = PUBLISH_URL + "/update_link";
+    public static final String CHANGELOG_URL;
+    public static final String CONTACT_URL = DOCS_URL + "/help.html";
+    // 服务器URL配置
+    private static final String DEFAULT_PUBLISH_URL = "https://api.pixellive.cn";
     public static final String EULA_URL = DOCS_URL + "/eula/hmcl.html";
     public static final String GROUPS_URL = "https://www.bilibili.com/opus/905435541874409529";
 
@@ -64,8 +71,12 @@ public final class Metadata {
     public static final Path HMCL_GLOBAL_DIRECTORY;
     public static final Path HMCL_CURRENT_DIRECTORY;
     public static final Path DEPENDENCIES_DIRECTORY;
+    // 配置字段常量
+    private static final String KOKUGAI_FIELD = "kokugai";
+    private static final String KOKUGAI_VALUE = "gaikoku";
 
     static {
+        // 初始化目录路径
         String hmclHome = System.getProperty("hmcl.home");
         if (hmclHome == null) {
             if (OperatingSystem.CURRENT_OS.isLinuxOrBSD()) {
@@ -87,20 +98,57 @@ public final class Metadata {
                 ? Paths.get(hmclCurrentDir).toAbsolutePath().normalize()
                 : CURRENT_DIRECTORY.resolve(".hmcl");
         DEPENDENCIES_DIRECTORY = HMCL_CURRENT_DIRECTORY.resolve("dependencies");
+
+        // 动态确定PUBLISH_URL的值
+        String publishUrl = determinePublishUrl();
+        PUBLISH_URL = publishUrl;
+
+        // 基于PUBLISH_URL设置其他相关URL
+        ABOUT_URL = PUBLISH_URL + "/about";
+        HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", PUBLISH_URL + "/update_link");
+        CHANGELOG_URL = PUBLISH_URL + "/update_link";
     }
 
+    /**
+     * @description: 根据配置文件中的kokugai字段确定发布URL
+     * 通过ConfigHolder检查配置文件中是否存在kokugai字段且值为"gaikoku"
+     * 如果满足条件则使用TIKTOK_SERVER_URL，否则使用默认URL
+     * @return String - 确定的发布URL
+     */
+    private static String determinePublishUrl() {
+        boolean useAlternativeUrl = ConfigHolder.checkConfigField(KOKUGAI_FIELD, KOKUGAI_VALUE);
+        return useAlternativeUrl ? TIKTOK_SERVER_URL : DEFAULT_PUBLISH_URL;
+    }
+
+    /**
+     * @description: 检查当前构建是否为稳定版本
+     * @return boolean - 稳定版本返回true
+     */
     public static boolean isStable() {
         return "stable".equals(BUILD_CHANNEL);
     }
 
+    /**
+     * @description: 检查当前构建是否为开发版本
+     * @return boolean - 开发版本返回true
+     */
     public static boolean isDev() {
         return "dev".equals(BUILD_CHANNEL);
     }
 
+    /**
+     * @description: 检查当前构建是否为每夜构建版本
+     * @return boolean - 每夜构建版本返回true
+     */
     public static boolean isNightly() {
         return !isStable() && !isDev();
     }
 
+    /**
+     * @description: 获取建议的Java下载链接
+     * 根据当前操作系统和架构返回合适的Java下载链接
+     * @return String - Java下载链接，如果不支持当前平台则返回null
+     */
     public static @Nullable String getSuggestedJavaDownloadLink() {
         if (OperatingSystem.CURRENT_OS == OperatingSystem.LINUX && Architecture.SYSTEM_ARCH == Architecture.LOONGARCH64_OW)
             return "https://www.loongnix.cn/zh/api/java/downloads-jdk21/index.html";
