@@ -72,7 +72,7 @@ public abstract class Task<T> {
         this.cancelled = cancelled;
     }
 
-    public final boolean isCancelled() {
+    public boolean isCancelled() {
         if (Thread.interrupted()) {
             Thread.currentThread().interrupt();
             return true;
