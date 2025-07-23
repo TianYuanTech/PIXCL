@@ -142,7 +142,7 @@ public abstract class SettingsView extends StackPane {
 
                         updatePane.getContent().add(content);
                     }
-                    settingsPane.getContent().add(updatePane);
+//                    settingsPane.getContent().add(updatePane);
                 }
 
                 {
