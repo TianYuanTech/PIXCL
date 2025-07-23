@@ -1,3 +1,5 @@
+// 文件：OfflineAccountFactory.java
+// 路径：HMCLCore/src/main/java/org/jackhuang/hmcl/auth/offline/OfflineAccountFactory.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -22,6 +24,7 @@ import org.jackhuang.hmcl.auth.CharacterSelector;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorArtifactProvider;
 import org.jackhuang.hmcl.util.gson.UUIDTypeAdapter;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -80,7 +83,7 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
         UUID uuid;
         Skin skin;
         String liveType = null;
-        String liveRoom = null;
+        Map<String, String> liveRooms = new HashMap<>();
         String cardKey = null;
         String accountMode = null;
 
@@ -89,7 +92,7 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
             uuid = data.uuid == null ? getUUIDFromUserName(username) : data.uuid;
             skin = data.skin;
             liveType = data.liveType;
-            liveRoom = data.liveRoom;
+            liveRooms = data.liveRooms != null ? new HashMap<>(data.liveRooms) : new HashMap<>();
             cardKey = data.cardKey;
             accountMode = data.accountMode;
         } else {
@@ -97,7 +100,7 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
             skin = null;
         }
 
-        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRoom, cardKey, accountMode);
+        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRooms, cardKey, accountMode);
     }
 
     /**
@@ -116,11 +119,29 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
 
         // 读取新增的字段
         String liveType = tryCast(storage.get("liveType"), String.class).orElse(null);
-        String liveRoom = tryCast(storage.get("liveRoom"), String.class).orElse(null);
         String cardKey = tryCast(storage.get("cardKey"), String.class).orElse(null);
         String accountMode = tryCast(storage.get("accountMode"), String.class).orElse(null);
 
-        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRoom, cardKey, accountMode);
+        // 处理liveRooms字段，支持向后兼容
+        Map<String, String> liveRooms = new HashMap<>();
+        Object liveRoomsObj = storage.get("liveRooms");
+        if (liveRoomsObj instanceof Map) {
+            // 新格式：Map结构
+            Map<?, ?> roomMap = (Map<?, ?>) liveRoomsObj;
+            for (Map.Entry<?, ?> entry : roomMap.entrySet()) {
+                if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+                    liveRooms.put((String) entry.getKey(), (String) entry.getValue());
+                }
+            }
+        } else {
+            // 向后兼容：旧的单一房间号格式
+            String oldLiveRoom = tryCast(storage.get("liveRoom"), String.class).orElse(null);
+            if (oldLiveRoom != null && liveType != null) {
+                liveRooms.put(liveType, oldLiveRoom);
+            }
+        }
+
+        return new OfflineAccount(downloader, username, uuid, skin, liveType, liveRooms, cardKey, accountMode);
     }
 
     /**
@@ -152,9 +173,9 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
         private final String liveType;
 
         /**
-         * @description: 直播房间号
+         * @description: 多平台直播房间号映射
          */
-        private final String liveRoom;
+        private final Map<String, String> liveRooms;
 
         /**
          * @description: 卡密
@@ -172,7 +193,7 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
          * @param skin 皮肤信息
          */
         public AdditionalData(UUID uuid, Skin skin) {
-            this(uuid, skin, null, null, null, null);
+            this(uuid, skin, null, new HashMap<>(), null, null);
         }
 
         /**
@@ -180,15 +201,36 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
          * @param uuid 用户UUID
          * @param skin 皮肤信息
          * @param liveType 直播类型
-         * @param liveRoom 直播房间号
+         * @param liveRooms 多平台直播房间号
          * @param cardKey 卡密
          * @param accountMode 账户模式
          */
-        public AdditionalData(UUID uuid, Skin skin, String liveType, String liveRoom, String cardKey, String accountMode) {
+        public AdditionalData(UUID uuid, Skin skin, String liveType, Map<String, String> liveRooms, String cardKey, String accountMode) {
             this.uuid = uuid;
             this.skin = skin;
             this.liveType = liveType;
-            this.liveRoom = liveRoom;
+            this.liveRooms = liveRooms != null ? liveRooms : new HashMap<>();
+            this.cardKey = cardKey;
+            this.accountMode = accountMode;
+        }
+
+        /**
+         * @description: 便捷构造函数，用于单平台房间号创建
+         * @param uuid 用户UUID
+         * @param skin 皮肤信息
+         * @param liveType 直播类型
+         * @param singleRoomNumber 单个房间号
+         * @param cardKey 卡密
+         * @param accountMode 账户模式
+         */
+        public AdditionalData(UUID uuid, Skin skin, String liveType, String singleRoomNumber, String cardKey, String accountMode) {
+            this.uuid = uuid;
+            this.skin = skin;
+            this.liveType = liveType;
+            this.liveRooms = new HashMap<>();
+            if (liveType != null && singleRoomNumber != null) {
+                this.liveRooms.put(liveType, singleRoomNumber);
+            }
             this.cardKey = cardKey;
             this.accountMode = accountMode;
         }
@@ -202,11 +244,11 @@ public final class OfflineAccountFactory extends AccountFactory<OfflineAccount> 
         }
 
         /**
-         * @description: 获取直播房间号
-         * @return String 直播房间号
+         * @description: 获取多平台直播房间号
+         * @return Map<String, String> 平台到房间号的映射
          */
-        public String getLiveRoom() {
-            return liveRoom;
+        public Map<String, String> getLiveRooms() {
+            return liveRooms;
         }
 
         /**

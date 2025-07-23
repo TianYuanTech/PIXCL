@@ -9,8 +9,6 @@ import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -50,7 +48,9 @@ import org.jackhuang.hmcl.util.versioning.VersionNumber;
 import java.io.File;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
@@ -88,15 +88,27 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         getLeft().getStyleClass().add("gray-background");
     }
 
+
     /**
-     * @return AccountInputData 账户输入数据
      * @description: 获取账户输入数据，供MainPage使用
+     * @return AccountInputData 账户输入数据
      */
     public static AccountInputData getAccountInputData() {
         if (accountInputControls == null) {
             return null;
         }
         return accountInputControls.getInputData();
+    }
+
+    /**
+     * @description: 获取所有平台的房间号数据，供MainPage使用
+     * @return Map<String, String> 所有平台房间号映射，如果控件不存在则返回空Map
+     */
+    public static Map<String, String> getAllPlatformRooms() {
+        if (accountInputControls == null) {
+            return new HashMap<>();
+        }
+        return accountInputControls.getAllPlatformRooms();
     }
 
     /**
@@ -290,7 +302,10 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     private boolean checkedModpack = false;
 
     /**
-     * @description: 账户输入控件类，支持自动填充上次使用的账户数据
+     * @description: 账户输入控件类，支持自动填充上次使用的账户数据和多平台房间号切换
+     */
+    /**
+     * @description: 账户输入控件类，支持自动填充上次使用的账户数据和多平台房间号切换
      */
     private static class AccountInputControls extends VBox {
 
@@ -332,7 +347,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         /**
          * @description: 验证状态绑定
          */
-        private final BooleanBinding validBinding;
+        private BooleanBinding validBinding;
 
         /**
          * @description: 当前账户属性，用于监听账户变化
@@ -349,6 +364,16 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          * @description: 用户名选择监听器，防止递归更新
          */
         private boolean isUpdatingUsernameSelection = false;
+
+        /**
+         * @description: 平台选择监听器，防止递归更新
+         */
+        private boolean isUpdatingPlatformSelection = false;
+
+        /**
+         * @description: 当前账户的多平台房间号，仅用于界面状态管理
+         */
+        private Map<String, String> displayRooms = new HashMap<>();
 
         /**
          * @description: 翻译键常量，便于维护和管理
@@ -374,26 +399,6 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY));
             cboUsername.setPrefWidth(310);
             cboUsername.setMaxWidth(310);
-
-            // 绑定用户名选项到账户列表
-            initializeUsernameOptions();
-
-            // 添加用户名选择监听器
-            cboUsername.valueProperty().addListener((observable, oldValue, newValue) -> {
-                if (!isUpdatingUsernameSelection && newValue != null) {
-                    switchToAccountByUsername(newValue);
-                }
-            });
-
-            // 添加焦点监听器
-            cboUsername.focusedProperty().addListener((observable, oldValue, newValue) -> {
-                if (!newValue) {
-                    String editorText = cboUsername.getEditor().getText();
-                    if ((editorText == null || editorText.trim().isEmpty()) && cboUsername.getValue() == null) {
-                        Platform.runLater(() -> cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY)));
-                    }
-                }
-            });
 
             // 登录方式选择器
             cboLoginMethod = new JFXComboBox<>();
@@ -432,15 +437,81 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             cardKeyContainer = new VBox();
             cardKeyContainer.getChildren().add(txtCardKey);
 
-            // 先设置登录方式变化监听器
-            cboLoginMethod.valueProperty().addListener(new ChangeListener<String>() {
-                @Override
-                public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-                    updateLoginMethodVisibility(newValue);
+            // 初始化用户名选项
+            initializeUsernameOptions();
+
+            // 设置事件监听器
+            setupEventListeners();
+
+            // 设置验证绑定
+            setupValidation();
+
+            // 绑定到当前选中的账户
+            currentAccount.bind(Accounts.selectedAccountProperty());
+
+            // 延迟初始化默认状态，避免与账户绑定冲突
+            Platform.runLater(() -> {
+                Account currentSelectedAccount = Accounts.getSelectedAccount();
+                if (currentSelectedAccount == null) {
+                    setDefaultState();
                 }
             });
 
-            // 创建验证绑定
+            // 添加所有组件
+            getChildren().addAll(
+                    cboUsername,
+                    cboLoginMethod,
+                    liveContainer,
+                    cardKeyContainer
+            );
+        }
+
+        /**
+         * @description: 设置事件监听器
+         */
+        private void setupEventListeners() {
+            // 用户名选择监听器
+            cboUsername.valueProperty().addListener((observable, oldValue, newValue) -> {
+                if (!isUpdatingUsernameSelection && newValue != null) {
+                    switchToAccountByUsername(newValue);
+                }
+            });
+
+            // 用户名焦点监听器
+            cboUsername.focusedProperty().addListener((observable, oldValue, newValue) -> {
+                if (!newValue) {
+                    String editorText = cboUsername.getEditor().getText();
+                    if ((editorText == null || editorText.trim().isEmpty()) && cboUsername.getValue() == null) {
+                        Platform.runLater(() -> cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY)));
+                    }
+                }
+            });
+
+            // 登录方式变化监听器
+            cboLoginMethod.valueProperty().addListener((observable, oldValue, newValue) -> {
+                updateLoginMethodVisibility(newValue);
+            });
+
+            // 平台选择变化监听器
+            cboPlatform.valueProperty().addListener((observable, oldValue, newValue) -> {
+                if (!isUpdatingPlatformSelection && newValue != null) {
+                    onPlatformChanged(oldValue, newValue);
+                }
+            });
+
+            // 房间号输入变化监听器
+            txtRoomNumber.textProperty().addListener((observable, oldValue, newValue) -> {
+                String currentPlatform = cboPlatform.getValue();
+                if (currentPlatform != null && newValue != null) {
+                    displayRooms.put(currentPlatform, newValue);
+                }
+            });
+        }
+
+        /**
+         * @description: 设置验证绑定
+         */
+        private void setupValidation() {
             validBinding = new BooleanBinding() {
                 {
                     bind(cboUsername.valueProperty());
@@ -470,26 +541,32 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                     return false;
                 }
             };
+        }
 
-            // 最后绑定到当前选中的账户
-            currentAccount.bind(Accounts.selectedAccountProperty());
-
-            // 延迟初始化默认状态，避免与账户绑定冲突
-            Platform.runLater(() -> {
-                Account currentSelectedAccount = Accounts.getSelectedAccount();
-                if (currentSelectedAccount == null) {
-                    // 只有在没有选中账户时才设置默认值
-                    setDefaultState();
+        /**
+         * @description: 处理平台切换事件
+         * @param oldPlatform 原平台
+         * @param newPlatform 新平台
+         */
+        private void onPlatformChanged(String oldPlatform, String newPlatform) {
+            if (oldPlatform != null && newPlatform != null && !oldPlatform.equals(newPlatform)) {
+                // 保存当前输入的房间号到原平台
+                String currentRoomNumber = txtRoomNumber.getText();
+                if (currentRoomNumber != null && !currentRoomNumber.trim().isEmpty()) {
+                    displayRooms.put(oldPlatform, currentRoomNumber.trim());
                 }
-            });
 
-            // 添加所有组件
-            getChildren().addAll(
-                    cboUsername,
-                    cboLoginMethod,
-                    liveContainer,
-                    cardKeyContainer
-            );
+                // 加载新平台的房间号
+                String newRoomNumber = displayRooms.get(newPlatform);
+                if (newRoomNumber != null && !newRoomNumber.trim().isEmpty()) {
+                    txtRoomNumber.setText(newRoomNumber);
+                } else {
+                    txtRoomNumber.clear();
+                }
+
+                LOG.info("平台切换: " + oldPlatform + " -> " + newPlatform +
+                        ", 房间号: " + (newRoomNumber != null ? newRoomNumber : "空"));
+            }
         }
 
         /**
@@ -497,7 +574,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         private void setDefaultState() {
             cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
-            // updateLoginMethodVisibility 会通过监听器自动调用
+            cboPlatform.setValue("抖音");
         }
 
         /**
@@ -592,109 +669,176 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         private void updateInputFieldsFromAccount(Account account) {
             if (account == null) {
-                // 如果没有账户，清空所有字段
                 clearAllFields();
                 return;
             }
 
-            // 填充用户名到组合框，避免触发账户切换
-            String accountUsername = account.getUsername();
-            if (accountUsername != null && !accountUsername.trim().isEmpty()) {
+            updateUsernameDisplay(account.getUsername());
 
-                // 使用Platform.runLater确保UI更新在正确的线程中执行
+            if (account instanceof OfflineAccount) {
+                OfflineAccount offlineAccount = (OfflineAccount) account;
+                updateFromOfflineAccount(offlineAccount);
+            } else {
+                setDefaultModeDisplay();
+                LOG.info("非离线账户，仅填充用户名: " + account.getUsername());
+            }
+        }
+
+        /**
+         * @description: 更新用户名显示
+         * @param accountUsername 账户用户名
+         */
+        private void updateUsernameDisplay(String accountUsername) {
+            if (accountUsername != null && !accountUsername.trim().isEmpty()) {
                 Platform.runLater(() -> {
                     isUpdatingUsernameSelection = true;
 
-                    // 检查是否在下拉选项中
                     if (cboUsername.getItems().contains(accountUsername)) {
-                        // 先清空编辑器文本，再设置选择值
                         cboUsername.getEditor().clear();
                         cboUsername.setValue(accountUsername);
                     } else {
-                        // 如果不在选项中，先清空选择值，再设置编辑器文本
                         cboUsername.setValue(null);
                         cboUsername.getEditor().setText(accountUsername);
-
-                        // 手动触发编辑器的文本更新，确保promptText消失
                         cboUsername.getEditor().positionCaret(accountUsername.length());
                     }
 
-                    // 确保组件重新布局以正确显示内容
                     cboUsername.requestLayout();
-
                     isUpdatingUsernameSelection = false;
                 });
             }
+        }
 
-            // 如果是离线账户，尝试提取额外信息
-            if (account instanceof OfflineAccount) {
-                OfflineAccount offlineAccount = (OfflineAccount) account;
+        /**
+         * @description: 从离线账户更新界面
+         * @param offlineAccount 离线账户对象
+         */
+        private void updateFromOfflineAccount(OfflineAccount offlineAccount) {
+            String accountMode = offlineAccount.getAccountMode();
+            String liveType = offlineAccount.getLiveType();
+            Map<String, String> liveRooms = offlineAccount.getLiveRooms();
+            String cardKey = offlineAccount.getCardKey();
 
-                String accountMode = offlineAccount.getAccountMode();
-                String liveType = offlineAccount.getLiveType();
-                String liveRoom = offlineAccount.getLiveRoom();
-                String cardKey = offlineAccount.getCardKey();
-
-                if ("LIVE".equals(accountMode) && liveType != null && liveRoom != null) {
-                    // 设置为直播间验证模式
-                    cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
-                    cboPlatform.setValue(liveType);
-                    txtRoomNumber.setText(liveRoom);
-
-                    LOG.info("自动填充直播间验证数据: " + liveType + " - " + liveRoom);
-
-                } else if ("CARD_KEY".equals(accountMode) && cardKey != null) {
-                    // 设置为卡密验证模式
-                    cboLoginMethod.setValue(i18n(CARD_KEY_VERIFICATION_KEY));
-                    txtCardKey.setText(cardKey);
-
-                    LOG.info("自动填充卡密验证数据");
-
-                } else {
-                    // 未知模式或数据不完整，清空相关字段
-                    cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
-                    clearModeSpecificFields();
-
-                    LOG.info("账户模式未知或数据不完整，清空模式相关字段");
-                }
-            } else {
-                // 非离线账户，只填充用户名，其他字段清空
-                cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
-                clearModeSpecificFields();
-
-                LOG.info("非离线账户，仅填充用户名: " + account.getUsername());
+            // 更新显示用的房间号数据
+            displayRooms.clear();
+            if (liveRooms != null && !liveRooms.isEmpty()) {
+                displayRooms.putAll(liveRooms);
+                LOG.info("加载账户的多平台房间号数据: " + liveRooms.size() + " 个平台");
             }
+
+            if ("LIVE".equals(accountMode) && liveType != null) {
+                updateLiveModeDisplay(liveType, liveRooms);
+            } else if ("CARD_KEY".equals(accountMode) && cardKey != null) {
+                updateCardKeyModeDisplay(cardKey, liveType, liveRooms);
+            } else {
+                // 账户模式未明确时，根据数据可用性设置默认显示
+                if (liveType != null && liveRooms != null && !liveRooms.isEmpty()) {
+                    updateLiveModeDisplay(liveType, liveRooms);
+                } else {
+                    setDefaultModeDisplay();
+                }
+                LOG.info("账户模式未明确，根据可用数据设置默认显示");
+            }
+        }
+
+        /**
+         * @description: 更新直播模式显示
+         * @param liveType 直播类型
+         * @param liveRooms 多平台房间号
+         */
+        private void updateLiveModeDisplay(String liveType, Map<String, String> liveRooms) {
+            cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
+
+            isUpdatingPlatformSelection = true;
+            cboPlatform.setValue(liveType);
+            isUpdatingPlatformSelection = false;
+
+            String currentRoomNumber = liveRooms != null ? liveRooms.get(liveType) : null;
+            if (currentRoomNumber != null) {
+                txtRoomNumber.setText(currentRoomNumber);
+            } else {
+                txtRoomNumber.clear();
+            }
+
+            LOG.info("自动填充直播间验证数据: " + liveType + " - " + currentRoomNumber +
+                    ", 总计平台数: " + displayRooms.size());
+        }
+
+        /**
+         * @description: 更新卡密模式显示
+         * @param cardKey 卡密
+         * @param liveType 直播类型
+         * @param liveRooms 多平台房间号
+         */
+        private void updateCardKeyModeDisplay(String cardKey, String liveType, Map<String, String> liveRooms) {
+            cboLoginMethod.setValue(i18n(CARD_KEY_VERIFICATION_KEY));
+
+            // 根据卡密是否存在决定输入框内容
+            if (cardKey != null && !cardKey.trim().isEmpty()) {
+                txtCardKey.setText(cardKey.trim());
+            } else {
+                txtCardKey.clear();
+            }
+
+            // 预设平台信息以便切换
+            isUpdatingPlatformSelection = true;
+            cboPlatform.setValue(liveType != null ? liveType : "抖音");
+            isUpdatingPlatformSelection = false;
+
+            String currentPlatform = cboPlatform.getValue();
+            if (currentPlatform != null && liveRooms != null && liveRooms.containsKey(currentPlatform)) {
+                txtRoomNumber.setText(liveRooms.get(currentPlatform));
+            } else {
+                txtRoomNumber.clear();
+            }
+
+            LOG.info("更新卡密模式显示，卡密状态: " + (cardKey != null && !cardKey.trim().isEmpty() ? "已设置" : "未设置"));
+        }
+
+        /**
+         * @description: 设置默认模式显示
+         */
+        private void setDefaultModeDisplay() {
+            cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
+
+            isUpdatingPlatformSelection = true;
+            cboPlatform.setValue("抖音");
+            isUpdatingPlatformSelection = false;
+
+            txtRoomNumber.clear();
+            txtCardKey.clear();
         }
 
         /**
          * @description: 清空所有输入字段
          */
         private void clearAllFields() {
-            // 使用Platform.runLater确保UI更新正确执行
             Platform.runLater(() -> {
                 isUpdatingUsernameSelection = true;
                 cboUsername.setValue(null);
                 cboUsername.getEditor().clear();
-                // 重新设置promptText确保正确显示
                 cboUsername.setPromptText(i18n(USERNAME_PROMPT_KEY));
                 isUpdatingUsernameSelection = false;
             });
 
             cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
             clearModeSpecificFields();
+            displayRooms.clear();
         }
 
         /**
          * @description: 清空模式相关的输入字段
          */
         private void clearModeSpecificFields() {
+            isUpdatingPlatformSelection = true;
             cboPlatform.setValue("抖音");
+            isUpdatingPlatformSelection = false;
+
             txtRoomNumber.clear();
             txtCardKey.clear();
         }
 
         /**
-         * @description: 更新登录方式的可见性
+         * @description: 更新登录方式的可见性和对应数据
          * @param loginMethod 登录方式
          */
         private void updateLoginMethodVisibility(String loginMethod) {
@@ -703,16 +847,58 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 liveContainer.setManaged(true);
                 cardKeyContainer.setVisible(false);
                 cardKeyContainer.setManaged(false);
+
+                // 切换到直播间验证时，确保显示当前平台的房间号
+                refreshLiveData();
+
             } else if (i18n(CARD_KEY_VERIFICATION_KEY).equals(loginMethod)) {
                 liveContainer.setVisible(false);
                 liveContainer.setManaged(false);
                 cardKeyContainer.setVisible(true);
                 cardKeyContainer.setManaged(true);
+
+                // 切换到卡密验证时，从当前账户读取卡密信息
+                refreshCardKeyData();
+
             } else {
                 liveContainer.setVisible(false);
                 liveContainer.setManaged(false);
                 cardKeyContainer.setVisible(false);
                 cardKeyContainer.setManaged(false);
+            }
+        }
+
+        /**
+         * @description: 刷新直播间验证数据
+         */
+        private void refreshLiveData() {
+            String currentPlatform = cboPlatform.getValue();
+            if (currentPlatform != null && displayRooms.containsKey(currentPlatform)) {
+                String roomNumber = displayRooms.get(currentPlatform);
+                if (roomNumber != null && !roomNumber.trim().isEmpty()) {
+                    txtRoomNumber.setText(roomNumber);
+                }
+            }
+        }
+
+        /**
+         * @description: 刷新卡密验证数据
+         */
+        private void refreshCardKeyData() {
+            Account currentAccount = Accounts.getSelectedAccount();
+            if (currentAccount instanceof OfflineAccount) {
+                OfflineAccount offlineAccount = (OfflineAccount) currentAccount;
+                String cardKey = offlineAccount.getCardKey();
+                if (cardKey != null && !cardKey.trim().isEmpty()) {
+                    txtCardKey.setText(cardKey.trim());
+                    LOG.info("从当前账户刷新卡密数据");
+                } else {
+                    txtCardKey.clear();
+                    LOG.info("当前账户无卡密信息，清空卡密输入框");
+                }
+            } else {
+                txtCardKey.clear();
+                LOG.info("非离线账户，清空卡密输入框");
             }
         }
 
@@ -722,12 +908,27 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         public AccountInputData getInputData() {
             return new AccountInputData(
-                    getUsernameValue(), // 使用新的获取用户名方法
+                    getUsernameValue(),
                     cboLoginMethod.getValue(),
                     cboPlatform.getValue(),
                     txtRoomNumber.getText(),
                     txtCardKey.getText()
             );
+        }
+
+        /**
+         * @description: 获取当前账户的所有平台房间号数据
+         * @return Map<String, String> 所有平台的房间号映射
+         */
+        public Map<String, String> getAllPlatformRooms() {
+            // 确保当前输入的房间号也被保存
+            String currentPlatform = cboPlatform.getValue();
+            String currentRoomNumber = txtRoomNumber.getText();
+            if (currentPlatform != null && currentRoomNumber != null && !currentRoomNumber.trim().isEmpty()) {
+                displayRooms.put(currentPlatform, currentRoomNumber.trim());
+            }
+
+            return new HashMap<>(displayRooms);
         }
 
         /**

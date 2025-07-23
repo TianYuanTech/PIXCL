@@ -632,14 +632,15 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                 UUID uuid = txtUUID == null ? null : StringUtils.isBlank(txtUUID.getText()) ? null : UUIDTypeAdapter.fromString(txtUUID.getText());
 
                 if (accountMode == AccountMode.CARD_KEY) {
-                    // 卡密模式：创建包含卡密信息的AdditionalData
+                    // 卡密模式：使用便捷构造函数创建包含卡密信息的AdditionalData
                     String cardKey = txtCardKey == null ? null : txtCardKey.getText();
-                    return new OfflineAccountFactory.AdditionalData(uuid, null, null, null,
-                            cardKey != null ? cardKey.trim() : null, "CARD_KEY");
+                    return new OfflineAccountFactory.AdditionalData(uuid, null, null,
+                            cardKey != null ? cardKey.trim() : null, null, "CARD_KEY");
                 } else {
-                    // 离线模式：创建包含直播信息的AdditionalData
+                    // 离线模式：使用便捷构造函数创建包含直播信息的AdditionalData
                     String liveType = cboPlatform == null ? null : cboPlatform.getValue();
                     String liveRoom = txtRoomNumber == null ? null : txtRoomNumber.getText();
+                    // 使用便捷构造函数：(UUID uuid, Skin skin, String liveType, String singleRoomNumber, String cardKey, String accountMode)
                     return new OfflineAccountFactory.AdditionalData(uuid, null, liveType,
                             liveRoom != null ? liveRoom.trim() : null, null, "LIVE");
                 }

@@ -1,3 +1,5 @@
+// 文件：OfflineAccount.java
+// 路径：HMCLCore/src/main/java/org/jackhuang/hmcl/auth/offline/OfflineAccount.java
 /*
  * Hello Minecraft! Launcher
  * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
@@ -33,6 +35,7 @@ import org.jackhuang.hmcl.util.ToStringBuilder;
 import org.jackhuang.hmcl.util.gson.UUIDTypeAdapter;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,7 +48,7 @@ import static org.jackhuang.hmcl.util.Lang.mapOf;
 import static org.jackhuang.hmcl.util.Pair.pair;
 
 /**
- * @description: 离线账户实现类，支持离线模式和卡密模式
+ * @description: 离线账户实现类，支持离线模式和卡密模式，现在支持多平台房间号
  */
 public class OfflineAccount extends Account {
 
@@ -75,9 +78,9 @@ public class OfflineAccount extends Account {
     private final String liveType;
 
     /**
-     * @description: 直播房间号
+     * @description: 多平台直播房间号映射
      */
-    private final String liveRoom;
+    private final Map<String, String> liveRooms;
 
     /**
      * @description: 卡密
@@ -91,7 +94,7 @@ public class OfflineAccount extends Account {
 
     /**
      * @description: 离线账户类的额外数据字段
-     * 用于存储liveType、liveRoom、cardKey等扩展信息
+     * 用于存储liveType、liveRooms、cardKey等扩展信息
      */
     private String extraData;
 
@@ -103,7 +106,7 @@ public class OfflineAccount extends Account {
      * @param skin 皮肤信息
      */
     protected OfflineAccount(AuthlibInjectorArtifactProvider downloader, String username, UUID uuid, Skin skin) {
-        this(downloader, username, uuid, skin, null, null, null, null);
+        this(downloader, username, uuid, skin, null, new HashMap<>(), null, null);
     }
 
     /**
@@ -113,18 +116,18 @@ public class OfflineAccount extends Account {
      * @param uuid 用户UUID
      * @param skin 皮肤信息
      * @param liveType 直播类型
-     * @param liveRoom 直播房间号
+     * @param liveRooms 多平台直播房间号
      * @param cardKey 卡密
      * @param accountMode 账户模式
      */
     protected OfflineAccount(AuthlibInjectorArtifactProvider downloader, String username, UUID uuid, Skin skin,
-                             String liveType, String liveRoom, String cardKey, String accountMode) {
+                             String liveType, Map<String, String> liveRooms, String cardKey, String accountMode) {
         this.downloader = requireNonNull(downloader);
         this.username = requireNonNull(username);
         this.uuid = requireNonNull(uuid);
         this.skin = skin;
         this.liveType = liveType;
-        this.liveRoom = liveRoom;
+        this.liveRooms = liveRooms != null ? new HashMap<>(liveRooms) : new HashMap<>();
         this.cardKey = cardKey;
         this.accountMode = accountMode;
 
@@ -203,11 +206,41 @@ public class OfflineAccount extends Account {
     }
 
     /**
-     * @description: 获取直播房间号
-     * @return String 直播房间号
+     * @description: 获取多平台直播房间号映射
+     * @return Map<String, String> 平台到房间号的映射
      */
+    public Map<String, String> getLiveRooms() {
+        return new HashMap<>(liveRooms);
+    }
+
+    /**
+     * @description: 获取指定平台的直播房间号
+     * @param platform 平台名称
+     * @return String 房间号，如果不存在则返回null
+     */
+    public String getLiveRoom(String platform) {
+        return liveRooms.get(platform);
+    }
+
+    /**
+     * @description: 获取当前选择平台的直播房间号
+     * @return String 当前平台房间号，如果当前平台未设置则返回null
+     */
+    public String getCurrentLiveRoom() {
+        if (liveType == null) {
+            return null;
+        }
+        return liveRooms.get(liveType);
+    }
+
+    /**
+     * @description: 向后兼容方法，获取单个房间号（已弃用）
+     * @return String 房间号
+     * @deprecated 使用 getCurrentLiveRoom() 或 getLiveRoom(String platform) 替代
+     */
+    @Deprecated
     public String getLiveRoom() {
-        return liveRoom;
+        return getCurrentLiveRoom();
     }
 
     /**
@@ -228,7 +261,7 @@ public class OfflineAccount extends Account {
 
     /**
      * @description: 获取账户的额外数据
-     * @return String - 额外数据的JSON字符串
+     * @return String 额外数据的JSON字符串
      */
     public String getExtraData() {
         return extraData;
@@ -236,7 +269,7 @@ public class OfflineAccount extends Account {
 
     /**
      * @description: 设置账户的额外数据
-     * @param extraData - 额外数据的JSON字符串
+     * @param extraData 额外数据的JSON字符串
      */
     public void setExtraData(String extraData) {
         this.extraData = extraData;
@@ -373,7 +406,7 @@ public class OfflineAccount extends Account {
                 pair("username", username),
                 pair("skin", skin == null ? null : skin.toStorage()),
                 pair("liveType", liveType),
-                pair("liveRoom", liveRoom),
+                pair("liveRooms", new HashMap<>(liveRooms)),
                 pair("cardKey", cardKey),
                 pair("accountMode", accountMode)
         );
@@ -398,7 +431,7 @@ public class OfflineAccount extends Account {
                 .append("username", username)
                 .append("uuid", uuid)
                 .append("liveType", liveType)
-                .append("liveRoom", liveRoom)
+                .append("liveRooms", liveRooms)
                 .append("accountMode", accountMode)
                 .toString();
     }

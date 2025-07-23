@@ -37,6 +37,7 @@ import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.CharacterSelector;
 import org.jackhuang.hmcl.auth.NoSelectedCharacterException;
+import org.jackhuang.hmcl.auth.offline.OfflineAccount;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
 import org.jackhuang.hmcl.auth.yggdrasil.GameProfile;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
@@ -67,9 +68,7 @@ import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -373,7 +372,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
     /**
      * @description: 执行原有的游戏启动逻辑
-     * 包含账户验证、文件更新检查等步骤
+     * 包含账户验证、文件更新检查等步骤，现在支持多平台房间号处理
      */
     private void proceedWithGameLaunch() {
         // 获取左侧栏的输入数据
@@ -402,7 +401,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
         boolean authResult = false;
         String accountMode = "";
         String liveType = null;
-        String liveRoom = null;
+        String currentRoomNumber = null;
         String cardKey = null;
 
         if (i18n("auth.method.live").equals(loginMethod)) {
@@ -421,7 +420,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
             if (authResult) {
                 accountMode = "LIVE";
                 liveType = platform;
-                liveRoom = roomNumber;
+                currentRoomNumber = roomNumber;
                 LOG.info("直播间验证成功");
             } else {
                 Controllers.dialog(i18n("launch.live.verification.failed"),
@@ -458,26 +457,92 @@ public final class MainPage extends StackPane implements DecoratorPage {
         }
 
         // 验证通过，创建账户然后启动游戏
-        createAccountAndLaunch(username, accountMode, liveType, liveRoom, cardKey);
+        createAccountAndLaunch(username, accountMode, liveType, currentRoomNumber, cardKey);
     }
 
     /**
-     * @description: 创建账户并启动游戏
+     * @description: 创建账户并启动游戏，现在支持完整的账户数据保存和合并
      * @param username 用户名
      * @param accountMode 账户模式
      * @param liveType 直播类型
-     * @param liveRoom 直播房间
+     * @param currentRoomNumber 当前平台房间号
      * @param cardKey 卡密
      */
     private void createAccountAndLaunch(String username, String accountMode,
-                                        String liveType, String liveRoom, String cardKey) {
+                                        String liveType, String currentRoomNumber, String cardKey) {
 
         LOG.info("开始创建账户并启动游戏: username=" + username + ", accountMode=" + accountMode);
 
-        // 创建额外数据
+        // 获取现有账户的完整数据
+        OfflineAccount existingAccount = findExistingOfflineAccount(username);
+
+        // 准备完整的账户数据
+        Map<String, String> allPlatformRooms = new HashMap<>();
+        String preservedCardKey = null;
+        String preservedLiveType = liveType;
+
+        // 如果存在现有账户，先合并其数据
+        if (existingAccount != null) {
+            // 保留现有的多平台房间号数据
+            Map<String, String> existingRooms = existingAccount.getLiveRooms();
+            if (existingRooms != null && !existingRooms.isEmpty()) {
+                allPlatformRooms.putAll(existingRooms);
+                LOG.info("合并现有账户的房间号数据: " + existingRooms.size() + " 个平台");
+            }
+
+            // 保留现有的卡密信息
+            String existingCardKey = existingAccount.getCardKey();
+            if (existingCardKey != null && !existingCardKey.trim().isEmpty()) {
+                preservedCardKey = existingCardKey.trim();
+                LOG.info("保留现有账户的卡密信息");
+            }
+
+            // 保留现有的直播类型信息
+            String existingLiveType = existingAccount.getLiveType();
+            if (existingLiveType != null && preservedLiveType == null) {
+                preservedLiveType = existingLiveType;
+            }
+        }
+
+        // 获取用户界面输入的所有平台房间号数据
+        try {
+            Map<String, String> uiPlatformRooms = RootPage.getAllPlatformRooms();
+            if (uiPlatformRooms != null && !uiPlatformRooms.isEmpty()) {
+                allPlatformRooms.putAll(uiPlatformRooms);
+                LOG.info("合并界面输入的房间号数据: " + uiPlatformRooms.size() + " 个平台");
+            }
+        } catch (Exception e) {
+            LOG.warning("获取界面房间号数据失败", e);
+        }
+
+        // 确保当前平台的房间号被正确保存
+        if (liveType != null && currentRoomNumber != null && !currentRoomNumber.trim().isEmpty()) {
+            allPlatformRooms.put(liveType, currentRoomNumber.trim());
+        }
+
+        // 根据当前登录模式确定最终的字段值
+        String finalCardKey;
+        String finalAccountMode;
+
+        if ("CARD_KEY".equals(accountMode)) {
+            // 卡密模式：使用当前输入的卡密，保留多平台房间号
+            finalCardKey = cardKey != null ? cardKey.trim() : preservedCardKey;
+            finalAccountMode = "CARD_KEY";
+        } else {
+            // 直播模式：保留现有卡密，使用当前直播设置
+            finalCardKey = preservedCardKey;
+            finalAccountMode = "LIVE";
+        }
+
+        LOG.info("最终账户数据 - 模式: " + finalAccountMode +
+                ", 平台: " + preservedLiveType +
+                ", 房间数: " + allPlatformRooms.size() +
+                ", 卡密: " + (finalCardKey != null ? "[已设置]" : "[未设置]"));
+
+        // 创建包含完整数据的AdditionalData
         UUID uuid = OfflineAccountFactory.getUUIDFromUserName(username);
-        OfflineAccountFactory.AdditionalData additionalData =
-                new OfflineAccountFactory.AdditionalData(uuid, null, liveType, liveRoom, cardKey, accountMode);
+        OfflineAccountFactory.AdditionalData additionalData = new OfflineAccountFactory.AdditionalData(
+                uuid, null, preservedLiveType, allPlatformRooms, finalCardKey, finalAccountMode);
 
         // 创建账户任务
         Task<Account> createAccountTask = Task.supplyAsync(() -> {
@@ -490,16 +555,15 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         createAccountTask.whenComplete(Schedulers.javafx(), account -> {
             try {
-                // 检查是否已存在账户，如果存在则替换
+                // 更新账户列表
                 int oldIndex = Accounts.getAccounts().indexOf(account);
                 if (oldIndex == -1) {
                     Accounts.getAccounts().add(account);
                     LOG.info("添加新账户: " + username);
                 } else {
-                    // 替换现有账户
                     Accounts.getAccounts().remove(oldIndex);
                     Accounts.getAccounts().add(oldIndex, account);
-                    LOG.info("替换现有账户: " + username);
+                    LOG.info("更新现有账户: " + username);
                 }
 
                 // 选择新账户
@@ -517,7 +581,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
             }
         }, exception -> {
             if (exception instanceof NoSelectedCharacterException) {
-                // 用户取消了字符选择，直接关闭
                 LOG.info("用户取消了字符选择");
             } else if (!(exception instanceof CancellationException)) {
                 LOG.warning("Failed to create account", exception);
@@ -525,6 +588,21 @@ public final class MainPage extends StackPane implements DecoratorPage {
                         i18n("create.failed"), MessageDialogPane.MessageType.ERROR);
             }
         }).start();
+    }
+
+    /**
+     * @description: 查找现有的离线账户
+     * @param username 用户名
+     * @return OfflineAccount 找到的离线账户，如果不存在则返回null
+     */
+    private OfflineAccount findExistingOfflineAccount(String username) {
+        ObservableList<Account> allAccounts = Accounts.getAccounts();
+        for (Account account : allAccounts) {
+            if (account instanceof OfflineAccount && username.equals(account.getUsername())) {
+                return (OfflineAccount) account;
+            }
+        }
+        return null;
     }
 
     /**
