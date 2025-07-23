@@ -112,6 +112,17 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
     }
 
     /**
+     * @description: 获取当前缓存的卡密数据，供MainPage使用
+     * @return String 缓存的卡密，如果没有缓存则返回null
+     */
+    public static String getCachedCardKey() {
+        if (accountInputControls == null) {
+            return null;
+        }
+        return accountInputControls.getCachedCardKey();
+    }
+
+    /**
      * @return ReadOnlyObjectProperty<State> 页面状态
      * @description: 获取页面状态属性
      */
@@ -376,6 +387,16 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         private Map<String, String> displayRooms = new HashMap<>();
 
         /**
+         * @description: 当前账户的卡密缓存，用于登录方式切换时保持数据
+         */
+        private String currentCardKeyCache = "";
+
+        /**
+         * @description: 当前缓存关联的账户用户名，用于检测账户切换
+         */
+        private String cacheAccountUsername = null;
+
+        /**
          * @description: 翻译键常量，便于维护和管理
          */
         private static final String USERNAME_PROMPT_KEY = "account.input.username.prompt";
@@ -504,6 +525,12 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 String currentPlatform = cboPlatform.getValue();
                 if (currentPlatform != null && newValue != null) {
                     displayRooms.put(currentPlatform, newValue);
+                }
+            });
+
+            txtCardKey.textProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    currentCardKeyCache = newValue;
                 }
             });
         }
@@ -670,10 +697,20 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         private void updateInputFieldsFromAccount(Account account) {
             if (account == null) {
                 clearAllFields();
+                clearCardKeyCache();
                 return;
             }
 
-            updateUsernameDisplay(account.getUsername());
+            String accountUsername = account.getUsername();
+
+            // 检测账户切换，如果是不同账户则清除卡密缓存
+            if (cacheAccountUsername == null || !cacheAccountUsername.equals(accountUsername)) {
+                clearCardKeyCache();
+                cacheAccountUsername = accountUsername;
+                LOG.info("检测到账户切换，已清除卡密缓存: " + accountUsername);
+            }
+
+            updateUsernameDisplay(accountUsername);
 
             if (account instanceof OfflineAccount) {
                 OfflineAccount offlineAccount = (OfflineAccount) account;
@@ -682,6 +719,14 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
                 setDefaultModeDisplay();
                 LOG.info("非离线账户，仅填充用户名: " + account.getUsername());
             }
+        }
+
+        /**
+         * @description: 清除卡密缓存
+         */
+        private void clearCardKeyCache() {
+            currentCardKeyCache = "";
+            cacheAccountUsername = null;
         }
 
         /**
@@ -823,6 +868,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             cboLoginMethod.setValue(i18n(LIVE_VERIFICATION_KEY));
             clearModeSpecificFields();
             displayRooms.clear();
+            clearCardKeyCache();
         }
 
         /**
@@ -835,6 +881,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
             txtRoomNumber.clear();
             txtCardKey.clear();
+            // 注意：这里不清除卡密缓存，因为可能只是界面模式切换
         }
 
         /**
@@ -886,12 +933,22 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
          */
         private void refreshCardKeyData() {
             Account currentAccount = Accounts.getSelectedAccount();
+
+            // 优先使用缓存中的卡密信息
+            if (currentCardKeyCache != null && !currentCardKeyCache.trim().isEmpty()) {
+                txtCardKey.setText(currentCardKeyCache.trim());
+                LOG.info("从缓存恢复卡密数据");
+                return;
+            }
+
+            // 缓存为空时从账户读取
             if (currentAccount instanceof OfflineAccount) {
                 OfflineAccount offlineAccount = (OfflineAccount) currentAccount;
                 String cardKey = offlineAccount.getCardKey();
                 if (cardKey != null && !cardKey.trim().isEmpty()) {
                     txtCardKey.setText(cardKey.trim());
-                    LOG.info("从当前账户刷新卡密数据");
+                    currentCardKeyCache = cardKey.trim();
+                    LOG.info("从当前账户读取卡密数据并更新缓存");
                 } else {
                     txtCardKey.clear();
                     LOG.info("当前账户无卡密信息，清空卡密输入框");
@@ -929,6 +986,15 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
             }
 
             return new HashMap<>(displayRooms);
+        }
+
+        /**
+         * @description: 获取当前缓存的卡密数据
+         * @return String 缓存的卡密，如果为空则返回null
+         */
+        public String getCachedCardKey() {
+            return (currentCardKeyCache != null && !currentCardKeyCache.trim().isEmpty())
+                    ? currentCardKeyCache.trim() : null;
         }
 
         /**

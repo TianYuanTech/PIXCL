@@ -152,6 +152,7 @@ public class PixelLiveGameConfig {
     private static void handleLiveModeUpdateWithMultiPlatform(JsonObject config, OfflineAccount offlineAccount) {
         String liveType = offlineAccount.getLiveType();
         Map<String, String> liveRooms = offlineAccount.getLiveRooms();
+        String cardKey = offlineAccount.getCardKey();
 
         LOG.info("Processing live mode with multi-platform support: liveType=" + liveType + ", platforms=" +
                 (liveRooms != null ? liveRooms.size() : 0));
@@ -168,8 +169,17 @@ public class PixelLiveGameConfig {
             return;
         }
 
-        // 首先禁用卡密模式
+        // 禁用卡密模式
         config.addProperty("isCardKeyModeEnabled", false);
+
+        // 根据当前账户的卡密状态更新cardKeyValue字段
+        if (cardKey != null && !cardKey.trim().isEmpty()) {
+            config.addProperty("cardKeyValue", cardKey.trim());
+            LOG.info("Updated cardKeyValue with current account's card key");
+        } else {
+            config.addProperty("cardKeyValue", "");
+            LOG.info("Cleared cardKeyValue as current account has no card key");
+        }
 
         // 更新配置中的liveType字段为当前选择的平台
         config.addProperty("liveType", mappedLiveType);
@@ -243,14 +253,17 @@ public class PixelLiveGameConfig {
 
         LOG.info("Processing card key mode: cardKey=" + (cardKey != null ? "[已设置]" : "[未设置]"));
 
-        if (cardKey == null) {
-            LOG.warning("Missing cardKey in offline account");
+        if (cardKey == null || cardKey.trim().isEmpty()) {
+            LOG.warning("Missing or empty cardKey in offline account for card key mode");
+            // 即使卡密为空，也要更新配置以保持一致性
+            config.addProperty("isCardKeyModeEnabled", false);
+            config.addProperty("cardKeyValue", "");
             return;
         }
 
         // 启用卡密模式
         config.addProperty("isCardKeyModeEnabled", true);
-        config.addProperty("cardKeyValue", cardKey);
+        config.addProperty("cardKeyValue", cardKey.trim());
 
         // 设置默认的liveType为空，但保留所有平台ID字段不变
         config.addProperty("liveType", "");

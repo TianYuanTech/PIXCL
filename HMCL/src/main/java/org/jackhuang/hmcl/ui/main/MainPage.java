@@ -471,6 +471,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
     private void createAccountAndLaunch(String username, String accountMode,
                                         String liveType, String currentRoomNumber, String cardKey) {
 
+
         LOG.info("开始创建账户并启动游戏: username=" + username + ", accountMode=" + accountMode);
 
         // 获取现有账户的完整数据
@@ -520,6 +521,16 @@ public final class MainPage extends StackPane implements DecoratorPage {
             allPlatformRooms.put(liveType, currentRoomNumber.trim());
         }
 
+        // 获取界面缓存的卡密数据
+        String cachedCardKey = null;
+        try {
+            cachedCardKey = RootPage.getCachedCardKey();
+            if (cachedCardKey != null) {
+                LOG.info("检测到界面缓存的卡密数据");
+            }
+        } catch (Exception e) {
+            LOG.warning("获取界面卡密缓存失败", e);
+        }
         // 根据当前登录模式确定最终的字段值
         String finalCardKey;
         String finalAccountMode;
@@ -530,7 +541,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
             finalAccountMode = "CARD_KEY";
         } else {
             // 直播模式：保留现有卡密，使用当前直播设置
-            finalCardKey = preservedCardKey;
+            finalCardKey = cachedCardKey != null ? cachedCardKey : preservedCardKey;
             finalAccountMode = "LIVE";
         }
 
