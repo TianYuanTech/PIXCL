@@ -155,17 +155,17 @@ public class PixelLiveGameConfig {
 
         // 首先禁用卡密模式
         config.addProperty("isCardKeyModeEnabled", false);
-        config.addProperty("cardKeyValue", "");
+//        config.addProperty("cardKeyValue", "");
 
         // 更新配置中的liveType字段
         config.addProperty("liveType", mappedLiveType);
 
         // 清空所有平台的ID字段，然后设置当前平台的ID
-        config.addProperty("douyinID", "");
-        config.addProperty("kuaishouID", "");
-        config.addProperty("BilibiliID", "");
-        config.addProperty("tiktokID", "");
-        config.addProperty("twitchID", "");
+//        config.addProperty("douyinID", "");
+//        config.addProperty("kuaishouID", "");
+//        config.addProperty("BilibiliID", "");
+//        config.addProperty("tiktokID", "");
+//        config.addProperty("twitchID", "");
 
         // 根据平台类型设置对应的ID字段
         switch (mappedLiveType) {
