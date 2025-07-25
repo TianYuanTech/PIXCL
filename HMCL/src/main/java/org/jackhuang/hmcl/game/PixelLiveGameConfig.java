@@ -1,4 +1,5 @@
 // 文件：PixelLiveGameConfig.java
+// 路径：org/jackhuang/hmcl/game/PixelLiveGameConfig.java
 package org.jackhuang.hmcl.game;
 
 import com.google.gson.Gson;
@@ -21,10 +22,13 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 /**
  * @description: PixelLiveGame配置文件管理类
  * 负责处理游戏目录中的PixelLiveGame.json配置文件的读取、创建和更新
- * 现在支持多平台房间号管理，每次游戏启动时会根据当前选择的平台更新对应的配置字段
+ * 支持多平台房间号管理，统一处理直播模式和卡密模式，仅通过isCardKeyModeEnabled字段区分
  */
 public class PixelLiveGameConfig {
 
+    /**
+     * @description: JSON格式化器，用于生成可读性良好的配置文件
+     */
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
             .create();
@@ -80,8 +84,7 @@ public class PixelLiveGameConfig {
 
     /**
      * @description: 根据用户账户信息更新PixelLiveGame.json配置文件
-     * 此方法在每次游戏启动时都会被调用，现在支持多平台房间号管理
-     * 只更新当前选择平台的ID字段，保留其他平台已配置的房间号
+     * 此方法在每次游戏启动时都会被调用，支持多平台房间号管理和统一模式处理
      * @param account 用户账户对象，包含多平台房间号信息
      * @param gameDir 游戏目录路径
      * @throws IOException 文件操作异常
@@ -102,7 +105,7 @@ public class PixelLiveGameConfig {
         // 读取现有配置或创建默认配置
         JsonObject config = loadOrCreateConfig(configFile);
 
-        // 如果是离线账户，根据账户信息更新相关字段
+        // 根据账户类型更新配置
         if (account instanceof OfflineAccount) {
             OfflineAccount offlineAccount = (OfflineAccount) account;
             updateConfigFromOfflineAccount(config, offlineAccount);
@@ -119,7 +122,7 @@ public class PixelLiveGameConfig {
 
     /**
      * @description: 根据离线账户信息更新配置
-     * 现在支持多平台房间号管理，只更新当前选择平台的配置，保留其他平台设置
+     * 统一处理所有模式，仅通过isCardKeyModeEnabled字段区分登录方式
      * @param config 配置对象
      * @param offlineAccount 离线账户对象
      */
@@ -128,10 +131,9 @@ public class PixelLiveGameConfig {
             String accountMode = offlineAccount.getAccountMode();
             LOG.info("Processing offline account mode: " + accountMode + " for user: " + offlineAccount.getUsername());
 
-            if ("LIVE".equals(accountMode)) {
-                handleLiveModeUpdateWithMultiPlatform(config, offlineAccount);
-            } else if ("CARD_KEY".equals(accountMode)) {
-                handleCardKeyModeUpdate(config, offlineAccount);
+            // 统一处理所有离线账户模式
+            if ("LIVE".equals(accountMode) || "CARD_KEY".equals(accountMode)) {
+                handleUnifiedModeUpdate(config, offlineAccount);
             } else {
                 LOG.info("Unknown or missing account mode for offline account, setting to default mode");
                 updateConfigForNonOfflineAccount(config);
@@ -144,56 +146,49 @@ public class PixelLiveGameConfig {
     }
 
     /**
-     * @description: 处理直播模式的配置更新，支持多平台房间号管理
-     * 根据当前选择的平台更新对应的ID字段，同时保留其他平台的房间号设置
+     * @description: 统一处理离线账户配置更新
+     * 更新所有配置字段，根据账户模式设置isCardKeyModeEnabled字段值
      * @param config 配置对象
      * @param offlineAccount 离线账户对象
      */
-    private static void handleLiveModeUpdateWithMultiPlatform(JsonObject config, OfflineAccount offlineAccount) {
+    private static void handleUnifiedModeUpdate(JsonObject config, OfflineAccount offlineAccount) {
+        String accountMode = offlineAccount.getAccountMode();
         String liveType = offlineAccount.getLiveType();
         Map<String, String> liveRooms = offlineAccount.getLiveRooms();
         String cardKey = offlineAccount.getCardKey();
 
-        LOG.info("Processing live mode with multi-platform support: liveType=" + liveType + ", platforms=" +
-                (liveRooms != null ? liveRooms.size() : 0));
+        LOG.info("Processing unified mode update: accountMode=" + accountMode +
+                ", liveType=" + liveType +
+                ", platforms=" + (liveRooms != null ? liveRooms.size() : 0) +
+                ", cardKey=" + (cardKey != null ? "[已设置]" : "[未设置]"));
 
-        if (liveType == null) {
-            LOG.warning("Missing liveType in offline account");
-            return;
-        }
+        // 根据账户模式设置卡密模式启用状态
+        boolean isCardKeyModeEnabled = "CARD_KEY".equals(accountMode);
+        config.addProperty("isCardKeyModeEnabled", isCardKeyModeEnabled);
 
-        // 映射直播平台类型
-        String mappedLiveType = LIVE_TYPE_MAPPING.get(liveType);
-        if (mappedLiveType == null) {
-            LOG.warning("Unknown live type: " + liveType);
-            return;
-        }
-
-        // 禁用卡密模式
-        config.addProperty("isCardKeyModeEnabled", false);
-
-        // 根据当前账户的卡密状态更新cardKeyValue字段
+        // 更新卡密字段
         if (cardKey != null && !cardKey.trim().isEmpty()) {
             config.addProperty("cardKeyValue", cardKey.trim());
-            LOG.info("Updated cardKeyValue with current account's card key");
+            LOG.info("Updated cardKeyValue with account's card key");
         } else {
             config.addProperty("cardKeyValue", "");
-            LOG.info("Cleared cardKeyValue as current account has no card key");
+            LOG.info("Cleared cardKeyValue as account has no card key");
         }
 
-        // 更新配置中的liveType字段为当前选择的平台
+        // 更新直播类型字段，如果为空则使用默认值DOUYIN
+        String mappedLiveType = (liveType != null) ? LIVE_TYPE_MAPPING.getOrDefault(liveType, "DOUYIN") : "DOUYIN";
         config.addProperty("liveType", mappedLiveType);
+        LOG.info("Updated liveType to: " + mappedLiveType + " (from: " + liveType + ")");
 
-        // 根据多平台房间号数据更新配置
+        // 更新所有平台ID字段
         if (liveRooms != null && !liveRooms.isEmpty()) {
             updateAllPlatformIds(config, liveRooms, mappedLiveType);
         } else {
-            // 如果没有多平台数据，清空所有平台ID但保持当前平台为空
             clearAllPlatformIds(config);
-            LOG.info("No multi-platform room data found, cleared all platform IDs");
+            LOG.info("No room data found, cleared all platform IDs");
         }
 
-        LOG.info("Live mode configuration updated successfully for platform: " + mappedLiveType);
+        LOG.info("Unified mode configuration updated successfully: isCardKeyModeEnabled=" + isCardKeyModeEnabled);
     }
 
     /**
@@ -240,52 +235,23 @@ public class PixelLiveGameConfig {
         for (String idFieldName : PLATFORM_ID_FIELD_MAPPING.values()) {
             config.addProperty(idFieldName, "");
         }
-    }
-
-    /**
-     * @description: 处理卡密模式的配置更新
-     * 只更新卡密相关字段，保留其他字段不变
-     * @param config 配置对象
-     * @param offlineAccount 离线账户对象
-     */
-    private static void handleCardKeyModeUpdate(JsonObject config, OfflineAccount offlineAccount) {
-        String cardKey = offlineAccount.getCardKey();
-
-        LOG.info("Processing card key mode: cardKey=" + (cardKey != null ? "[已设置]" : "[未设置]"));
-
-        if (cardKey == null || cardKey.trim().isEmpty()) {
-            LOG.warning("Missing or empty cardKey in offline account for card key mode");
-            // 即使卡密为空，也要更新配置以保持一致性
-            config.addProperty("isCardKeyModeEnabled", false);
-            config.addProperty("cardKeyValue", "");
-            return;
-        }
-
-        // 启用卡密模式
-        config.addProperty("isCardKeyModeEnabled", true);
-        config.addProperty("cardKeyValue", cardKey.trim());
-
-        // 设置默认的liveType为空，但保留所有平台ID字段不变
-        config.addProperty("liveType", "");
-
-        LOG.info("Card key mode configuration updated successfully");
+        LOG.info("Cleared all platform ID fields");
     }
 
     /**
      * @description: 为非离线账户更新配置
-     * 设置为默认模式，但保留Cookie等用户自定义字段
+     * 设置为默认模式，清空所有相关字段
      * @param config 配置对象
      */
     private static void updateConfigForNonOfflineAccount(JsonObject config) {
         // 禁用卡密模式
         config.addProperty("isCardKeyModeEnabled", false);
-        config.addProperty("cardKeyValue", "");
 
-        // 设置默认的直播平台和清空ID字段
-        config.addProperty("liveType", "");
+        // 清空所有字段
+        config.addProperty("cardKeyValue", "");
         clearAllPlatformIds(config);
 
-        LOG.info("Configuration updated for non-offline account mode");
+        LOG.info("Configuration updated for non-offline account mode - all fields cleared");
     }
 
     /**

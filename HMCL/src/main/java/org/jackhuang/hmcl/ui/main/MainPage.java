@@ -39,6 +39,7 @@ import org.jackhuang.hmcl.auth.CharacterSelector;
 import org.jackhuang.hmcl.auth.NoSelectedCharacterException;
 import org.jackhuang.hmcl.auth.offline.OfflineAccount;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
+import org.jackhuang.hmcl.auth.offline.Skin;
 import org.jackhuang.hmcl.auth.yggdrasil.GameProfile;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
 import org.jackhuang.hmcl.game.Version;
@@ -460,8 +461,11 @@ public final class MainPage extends StackPane implements DecoratorPage {
         createAccountAndLaunch(username, accountMode, liveType, currentRoomNumber, cardKey);
     }
 
+    // 文件：MainPage.java (修改createAccountAndLaunch方法)
+// 路径：HMCL/src/main/java/org/jackhuang/hmcl/ui/main/MainPage.java
+
     /**
-     * @description: 创建账户并启动游戏，现在支持完整的账户数据保存和合并
+     * @description: 创建账户并启动游戏，现在支持完整的账户数据保存和合并，包含皮肤信息保留
      * @param username 用户名
      * @param accountMode 账户模式
      * @param liveType 直播类型
@@ -470,7 +474,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
      */
     private void createAccountAndLaunch(String username, String accountMode,
                                         String liveType, String currentRoomNumber, String cardKey) {
-
 
         LOG.info("开始创建账户并启动游戏: username=" + username + ", accountMode=" + accountMode);
 
@@ -481,6 +484,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
         Map<String, String> allPlatformRooms = new HashMap<>();
         String preservedCardKey = null;
         String preservedLiveType = liveType;
+        Skin preservedSkin; // 保留皮肤信息
 
         // 如果存在现有账户，先合并其数据
         if (existingAccount != null) {
@@ -503,6 +507,18 @@ public final class MainPage extends StackPane implements DecoratorPage {
             if (existingLiveType != null && preservedLiveType == null) {
                 preservedLiveType = existingLiveType;
             }
+
+            // 重要：保留现有的皮肤信息
+            Skin existingSkin = existingAccount.getSkin();
+            if (existingSkin != null) {
+                preservedSkin = existingSkin;
+                LOG.info("保留现有账户的皮肤信息: " + existingSkin.getType());
+            } else {
+                preservedSkin = null;
+                LOG.info("现有账户无皮肤信息");
+            }
+        } else {
+            preservedSkin = null;
         }
 
         // 获取用户界面输入的所有平台房间号数据
@@ -531,6 +547,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
         } catch (Exception e) {
             LOG.warning("获取界面卡密缓存失败", e);
         }
+
         // 根据当前登录模式确定最终的字段值
         String finalCardKey;
         String finalAccountMode;
@@ -548,12 +565,13 @@ public final class MainPage extends StackPane implements DecoratorPage {
         LOG.info("最终账户数据 - 模式: " + finalAccountMode +
                 ", 平台: " + preservedLiveType +
                 ", 房间数: " + allPlatformRooms.size() +
-                ", 卡密: " + (finalCardKey != null ? "[已设置]" : "[未设置]"));
+                ", 卡密: " + (finalCardKey != null ? "[已设置]" : "[未设置]") +
+                ", 皮肤: " + (preservedSkin != null ? "[已保留:" + preservedSkin.getType() + "]" : "[无皮肤]"));
 
-        // 创建包含完整数据的AdditionalData
+        // 创建包含完整数据的AdditionalData，重要：传入保留的皮肤信息
         UUID uuid = OfflineAccountFactory.getUUIDFromUserName(username);
         OfflineAccountFactory.AdditionalData additionalData = new OfflineAccountFactory.AdditionalData(
-                uuid, null, preservedLiveType, allPlatformRooms, finalCardKey, finalAccountMode);
+                uuid, preservedSkin, preservedLiveType, allPlatformRooms, finalCardKey, finalAccountMode);
 
         // 创建账户任务
         Task<Account> createAccountTask = Task.supplyAsync(() -> {
@@ -570,11 +588,22 @@ public final class MainPage extends StackPane implements DecoratorPage {
                 int oldIndex = Accounts.getAccounts().indexOf(account);
                 if (oldIndex == -1) {
                     Accounts.getAccounts().add(account);
-                    LOG.info("添加新账户: " + username);
+                    LOG.info("添加新账户: " + username + (preservedSkin != null ? " (皮肤已保留:" + preservedSkin.getType() + ")" : ""));
                 } else {
                     Accounts.getAccounts().remove(oldIndex);
                     Accounts.getAccounts().add(oldIndex, account);
-                    LOG.info("更新现有账户: " + username);
+                    LOG.info("更新现有账户: " + username + (preservedSkin != null ? " (皮肤已保留:" + preservedSkin.getType() + ")" : ""));
+                }
+
+                // 验证皮肤信息是否正确保留
+                if (account instanceof OfflineAccount && preservedSkin != null) {
+                    OfflineAccount offlineAccount = (OfflineAccount) account;
+                    Skin accountSkin = offlineAccount.getSkin();
+                    if (accountSkin != null) {
+                        LOG.info("账户皮肤信息验证成功: " + accountSkin.getType());
+                    } else {
+                        LOG.warning("账户皮肤信息保留失败，可能在创建过程中丢失");
+                    }
                 }
 
                 // 选择新账户
