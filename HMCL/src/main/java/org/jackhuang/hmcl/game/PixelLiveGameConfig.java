@@ -36,10 +36,11 @@ public class PixelLiveGameConfig {
     /**
      * @description: 默认的PixelLiveGame配置内容
      * 当配置文件不存在时使用此默认配置，所有字符串字段为空，布尔字段保持原值
+     * 注意：liveType默认设置为DOUYIN，确保不为空
      */
     private static final String DEFAULT_CONFIG =
             "{\n" +
-                    "  \"liveType\": \"\",\n" +
+                    "  \"liveType\": \"DOUYIN\",\n" +
                     "  \"douyinID\": \"\",\n" +
                     "  \"kuaishouID\": \"\",\n" +
                     "  \"kuaishouCookie\": \"\",\n" +
@@ -240,7 +241,7 @@ public class PixelLiveGameConfig {
 
     /**
      * @description: 为非离线账户更新配置
-     * 设置为默认模式，清空所有相关字段
+     * 设置为默认模式，清空所有相关字段，确保liveType设置为DOUYIN
      * @param config 配置对象
      */
     private static void updateConfigForNonOfflineAccount(JsonObject config) {
@@ -251,7 +252,10 @@ public class PixelLiveGameConfig {
         config.addProperty("cardKeyValue", "");
         clearAllPlatformIds(config);
 
-        LOG.info("Configuration updated for non-offline account mode - all fields cleared");
+        // 确保liveType设置为DOUYIN，防止为空
+        config.addProperty("liveType", "DOUYIN");
+
+        LOG.info("Configuration updated for non-offline account mode - all fields cleared, liveType set to DOUYIN");
     }
 
     /**
@@ -265,8 +269,13 @@ public class PixelLiveGameConfig {
             try {
                 byte[] bytes = Files.readAllBytes(configFile);
                 String content = new String(bytes, StandardCharsets.UTF_8);
+                JsonObject config = JsonParser.parseString(content).getAsJsonObject();
+
+                // 确保加载的配置中liveType不为空
+                ensureLiveTypeNotEmpty(config);
+
                 LOG.info("Successfully loaded existing PixelLiveGame.json configuration");
-                return JsonParser.parseString(content).getAsJsonObject();
+                return config;
             } catch (Exception e) {
                 LOG.warning("Failed to parse existing PixelLiveGame.json, creating new configuration", e);
                 return JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
@@ -274,6 +283,18 @@ public class PixelLiveGameConfig {
         } else {
             LOG.info("PixelLiveGame.json not found, creating new configuration");
             return JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
+        }
+    }
+
+    /**
+     * @description: 确保liveType字段不为空
+     * @param config 配置对象
+     */
+    private static void ensureLiveTypeNotEmpty(JsonObject config) {
+        if (!config.has("liveType") || config.get("liveType").isJsonNull() ||
+                config.get("liveType").getAsString().trim().isEmpty()) {
+            config.addProperty("liveType", "DOUYIN");
+            LOG.info("liveType was empty or missing, set to default value: DOUYIN");
         }
     }
 
@@ -292,6 +313,9 @@ public class PixelLiveGameConfig {
                 LOG.info("Added missing field: " + key);
             }
         }
+
+        // 特别检查liveType字段，确保不为空
+        ensureLiveTypeNotEmpty(config);
     }
 
     /**
@@ -303,6 +327,9 @@ public class PixelLiveGameConfig {
     private static void saveConfig(Path configFile, JsonObject config) throws IOException {
         // 确保所有必要字段都存在
         ensureRequiredFields(config);
+
+        // 最后再次确保liveType不为空
+        ensureLiveTypeNotEmpty(config);
 
         String content = GSON.toJson(config);
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
