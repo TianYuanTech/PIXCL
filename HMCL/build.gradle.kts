@@ -16,16 +16,7 @@ val isOfficial = System.getenv("HMCL_SIGNATURE_KEY") != null
         || (System.getenv("GITHUB_REPOSITORY_OWNER") == "HMCL-dev" && System.getenv("GITHUB_BASE_REF")
     .isNullOrEmpty())
 
-val buildNumber = System.getenv("BUILD_NUMBER")?.toInt().let { number ->
-    val offset = System.getenv("BUILD_NUMBER_OFFSET")?.toInt() ?: 0
-    if (number != null) {
-        (number - offset).toString()
-    } else {
-        val shortCommit = System.getenv("GITHUB_SHA")?.lowercase()?.substring(0, 7)
-        val prefix = if (isOfficial) "dev" else "unofficial"
-        if (!shortCommit.isNullOrEmpty()) "$prefix-$shortCommit" else "7"
-    }
-}
+val buildNumber = "8"
 val versionRoot = System.getenv("VERSION_ROOT") ?: "1.0"
 //val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "unofficial"
 val versionType = System.getenv("VERSION_TYPE") ?: "stable"

@@ -30,6 +30,27 @@ subprojects {
         options.encoding = "UTF-8"
     }
 
+    tasks.withType<JavaCompile> {
+        sourceCompatibility = "1.8"
+        targetCompatibility = "1.8"
+        options.encoding = "UTF-8"
+    }
+
+    tasks.withType<JavaExec> {
+        jvmArgs = listOf(
+            "-Dfile.encoding=UTF-8",
+            "-Dconsole.encoding=UTF-8",
+            "-Dsun.stdout.encoding=UTF-8",
+            "-Dsun.stderr.encoding=UTF-8"
+        )
+    }
+
+    tasks.withType<Test> {
+        useJUnitPlatform()
+        testLogging.showStandardStreams = true
+        jvmArgs = listOf("-Dfile.encoding=UTF-8")
+    }
+
     configure<CheckstyleExtension> {
         sourceSets = setOf()
     }

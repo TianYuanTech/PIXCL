@@ -355,15 +355,20 @@ public final class MainPage extends StackPane implements DecoratorPage {
     private boolean checkLauncherUpdateBeforeLaunch() {
         // 检查是否有可用的启动器更新
         boolean hasUpdate = UpdateChecker.isOutdated();
+        RemoteVersion latestVersion = UpdateChecker.getLatestVersion();
+//        RemoteVersion latestVersion = null;
 
-        if (hasUpdate) {
-            RemoteVersion latestVersion = UpdateChecker.getLatestVersion();
-            LOG.info("检测到启动器更新，版本: " + (latestVersion != null ? latestVersion.getVersion() : "未知"));
+        if (hasUpdate && latestVersion != null) {
+            LOG.info("检测到启动器更新，版本: " + latestVersion.getVersion());
 
             // 直接调用现有的更新方法
             onUpgrade();
 
             // 返回true表示启动了更新流程，需要取消游戏启动
+            return true;
+        } else if (latestVersion == null){
+            LOG.info("检查更新失败，获取到的版本号为空");
+            Controllers.dialog("检查更新失败，请检查网络连接或联系管理员","错误", MessageDialogPane.MessageType.ERROR);
             return true;
         }
 
