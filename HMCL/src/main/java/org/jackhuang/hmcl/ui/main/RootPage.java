@@ -430,7 +430,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
 
             // 直播平台选择器
             cboPlatform = new JFXComboBox<>();
-            cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
+            cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "小红书", "Twitch", "TikTok");
             cboPlatform.setPromptText(i18n(PLATFORM_KEY));
             cboPlatform.setPrefWidth(100);
 

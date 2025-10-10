@@ -40,7 +40,7 @@ public class AuthorizationChecker {
 
     /**
      * @description: 检查直播间授权状态，根据平台自动选择合适的服务器
-     * @param platform 平台标识（如"抖音"、"TikTok"、"Twitch"等）
+     * @param platform 平台标识
      * @param studioName 直播间名称/房间号
      * @return boolean true表示有授权，false表示无授权或请求失败
      */

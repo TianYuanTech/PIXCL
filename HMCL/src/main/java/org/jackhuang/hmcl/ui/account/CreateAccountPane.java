@@ -493,7 +493,7 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
                         add(lblPlatform, 0, rowIndex);
 
                         cboPlatform = new JFXComboBox<>();
-                        cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "Twitch", "TikTok");
+                        cboPlatform.getItems().addAll("抖音", "快手", "BiliBili", "小红书","Twitch", "TikTok");
                         cboPlatform.setPromptText(i18n("account.live.platform.prompt"));
                         cboPlatform.setMaxWidth(Double.MAX_VALUE);
                         add(cboPlatform, 1, rowIndex);

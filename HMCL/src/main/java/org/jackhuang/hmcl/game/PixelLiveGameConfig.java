@@ -31,6 +31,7 @@ public class PixelLiveGameConfig {
      */
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
+            .disableHtmlEscaping()  // 禁用HTML转义
             .create();
 
     /**
@@ -54,7 +55,8 @@ public class PixelLiveGameConfig {
                     "  \"isNameDisplay\": false,\n" +
                     "  \"isCardKeyModeEnabled\": false,\n" +
                     "  \"cardKeyValue\": \"\",\n" +
-                    "  \"BilibiliID\": \"\"\n" +
+                    "  \"BilibiliID\": \"\",\n" +
+                    "  \"xiaohongshuID\": \"\"\n" +
                     "}";
 
     /**
@@ -68,6 +70,7 @@ public class PixelLiveGameConfig {
         LIVE_TYPE_MAPPING.put("BiliBili", "BILIBILI");
         LIVE_TYPE_MAPPING.put("TikTok", "TIKTOK");
         LIVE_TYPE_MAPPING.put("Twitch", "TWITCH");
+        LIVE_TYPE_MAPPING.put("小红书", "XIAOHONGSHU");
     }
 
     /**
@@ -81,6 +84,7 @@ public class PixelLiveGameConfig {
         PLATFORM_ID_FIELD_MAPPING.put("BILIBILI", "BilibiliID");
         PLATFORM_ID_FIELD_MAPPING.put("TIKTOK", "tiktokID");
         PLATFORM_ID_FIELD_MAPPING.put("TWITCH", "twitchID");
+        PLATFORM_ID_FIELD_MAPPING.put("XIAOHONGSHU", "xiaohongshuID");
     }
 
     /**
@@ -265,25 +269,27 @@ public class PixelLiveGameConfig {
      * @throws IOException 文件操作异常
      */
     private static JsonObject loadOrCreateConfig(Path configFile) throws IOException {
+        JsonObject config;
+
         if (Files.exists(configFile)) {
             try {
                 byte[] bytes = Files.readAllBytes(configFile);
                 String content = new String(bytes, StandardCharsets.UTF_8);
-                JsonObject config = JsonParser.parseString(content).getAsJsonObject();
-
-                // 确保加载的配置中liveType不为空
-                ensureLiveTypeNotEmpty(config);
-
+                config = JsonParser.parseString(content).getAsJsonObject();
                 LOG.info("Successfully loaded existing PixelLiveGame.json configuration");
-                return config;
             } catch (Exception e) {
                 LOG.warning("Failed to parse existing PixelLiveGame.json, creating new configuration", e);
-                return JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
+                config = JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
             }
         } else {
             LOG.info("PixelLiveGame.json not found, creating new configuration");
-            return JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
+            config = JsonParser.parseString(DEFAULT_CONFIG).getAsJsonObject();
         }
+
+        // 确保配置包含所有必要字段，添加任何缺失的字段
+        ensureRequiredFields(config);
+
+        return config;
     }
 
     /**
