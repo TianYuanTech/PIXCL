@@ -109,45 +109,6 @@ public final class ConfigHolder {
     }
 
     /**
-     * @description: 检查是否应该使用海外API
-     * 检查.hmcl文件夹下是否存在名为"kokugai"的文件，且文件内容为"gaikoku"
-     * @return boolean - 如果应该使用海外API返回true，否则返回false
-     */
-    public static boolean shouldUseOverseasApi() {
-        try {
-            // 获取.hmcl目录路径
-            Path hmclDirectory = Metadata.HMCL_CURRENT_DIRECTORY;
-            Path kokugaiFile = hmclDirectory.resolve(KOKUGAI_FILENAME);
-
-            // 检查文件是否存在
-            if (!Files.exists(kokugaiFile)) {
-                return false;
-            }
-
-            // 检查是否为普通文件（不是目录）
-            if (!Files.isRegularFile(kokugaiFile)) {
-                return false;
-            }
-
-            // 读取文件内容并检查
-            String content = FileUtils.readText(kokugaiFile);
-            if (content == null) {
-                return false;
-            }
-
-            // 去除前后空白字符后比较内容
-            return KOKUGAI_CONTENT.equals(content.trim());
-
-        } catch (IOException e) {
-            LOG.warning("Failed to read kokugai file: " + e.getMessage());
-            return false;
-        } catch (Exception e) {
-            LOG.warning("Unexpected error during kokugai file check: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * @description: 检查配置文件中指定字段的值
      * 此方法专门用于在应用程序早期初始化阶段检查配置字段
      * 不依赖于完整的配置加载流程

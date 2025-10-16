@@ -17,21 +17,25 @@
  */
 package org.jackhuang.hmcl;
 
-import org.jackhuang.hmcl.setting.ConfigHolder;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.io.JarUtils;
 import org.jackhuang.hmcl.util.platform.Architecture;
+import org.jackhuang.hmcl.util.platform.NativeUtils;
 import org.jackhuang.hmcl.util.platform.OperatingSystem;
+import org.jackhuang.hmcl.util.platform.windows.Kernel32;
+import org.jackhuang.hmcl.util.platform.windows.WinConstants;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.EnumSet;
 
 /**
  * @description: 存储应用程序的元数据信息
  * 该类负责管理应用程序的基本信息、版本信息、URL配置等
- * 并在初始化时根据kokugai文件动态设置服务器URL
+ * 并在初始化时根据地区判断动态设置服务器URL
  */
 public final class Metadata {
     private Metadata() {
@@ -47,13 +51,13 @@ public final class Metadata {
     public static final String TITLE = NAME + " " + VERSION;
     public static final String FULL_TITLE = FULL_NAME + " v" + VERSION;
 
-    // 动态设置的发布URL，根据kokugai文件决定
-    public static final String PUBLISH_URL;
+    public static final String PUBLISH_URL = "https://api.pixellive.cn";
     public static final String TIKTOK_SERVER_URL = "https://tkapi.pixellive.cn";
-    // 服务器URL配置
-    private static final String DEFAULT_PUBLISH_URL = "https://api.pixellive.cn";
     public static final String ABOUT_URL;
+    private static final String MCPATCH_DOMESTIC_SERVER = "http://api.pixellive.cn:8080";
+
     public static final String HMCL_UPDATE_URL;
+    private static final String MCPATCH_OVERSEAS_SERVER = "http://tkapi.pixellive.cn:8080";
 
     public static final String DOCS_URL = "https://docs.hmcl.net";
     public static final String CHANGELOG_URL;
@@ -94,25 +98,56 @@ public final class Metadata {
                 : CURRENT_DIRECTORY.resolve(".hmcl");
         DEPENDENCIES_DIRECTORY = HMCL_CURRENT_DIRECTORY.resolve("dependencies");
 
-        // 动态确定PUBLISH_URL的值
-        String publishUrl = determinePublishUrl();
-        PUBLISH_URL = publishUrl;
-
-        // 基于PUBLISH_URL设置其他相关URL
+        // 根据用户地区设置服务器URL
+        // 中国大陆用户使用PUBLISH_URL，海外用户使用TIKTOK_SERVER_URL
+        String baseServerUrl = isInMainlandChina() ? PUBLISH_URL : TIKTOK_SERVER_URL;
+        System.out.println("用户所用链接为：" + baseServerUrl);
         ABOUT_URL = PUBLISH_URL + "/about";
-        HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", PUBLISH_URL + "/update_link");
+        HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", baseServerUrl + "/update_link");
+
         CHANGELOG_URL = PUBLISH_URL + "/update_link";
     }
 
+
     /**
-     * @description: 根据kokugai文件确定发布URL
-     * 通过ConfigHolder检查.hmcl目录下是否存在名为"kokugai"的文件且内容为"gaikoku"
-     * 如果满足条件则使用TIKTOK_SERVER_URL，否则使用默认URL
-     * @return String - 确定的发布URL
+     * @description: 判断用户是否位于中国大陆地区
+     * 通过多种方式检测用户地理位置，包括时区、Windows系统地理位置API等
+     * @return boolean - 位于中国大陆返回true，否则返回false
      */
-    private static String determinePublishUrl() {
-        boolean useOverseasUrl = ConfigHolder.shouldUseOverseasApi();
-        return useOverseasUrl ? TIKTOK_SERVER_URL : DEFAULT_PUBLISH_URL;
+    private static boolean isInMainlandChina() {
+        String zoneId = ZoneId.systemDefault().getId();
+
+        // 检查时区标识符是否为中国大陆时区
+        if (Arrays.asList(
+                "Asia/Shanghai",
+                "Asia/Beijing",      // 非标准名称，但某些系统使用
+                "Asia/Chongqing",
+                "Asia/Chungking",
+                "Asia/Harbin"
+        ).contains(zoneId)) {
+            return true;
+        }
+
+        // Windows系统通过系统API获取地理位置
+        if (OperatingSystem.CURRENT_OS == OperatingSystem.WINDOWS && NativeUtils.USE_JNA) {
+            Kernel32 kernel32 = Kernel32.INSTANCE;
+            // 地理位置ID 45 对应中国
+            if (kernel32 != null && kernel32.GetUserGeoID(WinConstants.GEOCLASS_NATION) == 45) {
+                return true;
+            }
+        } else if (OperatingSystem.CURRENT_OS == OperatingSystem.LINUX && "GMT+08:00".equals(zoneId)) {
+            // Linux系统可能使用非标准时区名称，Java会将其解析为GMT+08:00
+            return true;
+        }
+
+        return false;
+    }
+
+    public static String getMcPatchServerUrl() {
+        boolean isMainland = isInMainlandChina();
+        String serverUrl = isMainland ? MCPATCH_DOMESTIC_SERVER : MCPATCH_OVERSEAS_SERVER;
+        System.out.println("检测到用户位于" + (isMainland ? "中国大陆" : "海外地区") + "，使用服务器: " + serverUrl);
+        return serverUrl;
     }
 
     /**

@@ -22,6 +22,7 @@ import javafx.stage.Stage;
 import mcpatch.McPatchClient;
 import mcpatch.callback.ProgressCallback;
 import org.jackhuang.hmcl.Launcher;
+import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.AuthInfo;
 import org.jackhuang.hmcl.auth.AuthenticationException;
@@ -275,7 +276,8 @@ public final class LauncherHelper {
      * @description: 创建支持取消操作的McPatch文件更新任务
      */
     private Task<Void> createMcPatchTask() {
-        return new McPatchTask();
+        String serverUrl = Metadata.getMcPatchServerUrl();
+        return new McPatchTask(serverUrl);
     }
 
     /**
@@ -285,8 +287,10 @@ public final class LauncherHelper {
 
         private volatile Thread mcPatchThread;
         private volatile boolean shouldCancel = false;
+        private final String serverUrl;
 
-        public McPatchTask() {
+        public McPatchTask(String serverUrl) {
+            this.serverUrl = serverUrl;
             setStage("launch.state.files_updating");
             setName(i18n("mcpatch.task.name"));
             setSignificance(TaskSignificance.MAJOR);
@@ -295,24 +299,21 @@ public final class LauncherHelper {
         @Override
         public void execute() throws Exception {
             try {
-                LOG.info("开始文件更新检查");
+                LOG.info("开始文件更新检查，使用服务器: " + serverUrl);
                 updateMessage(i18n("mcpatch.connecting"));
                 updateProgress(0.0);
 
-                // 检查是否已被取消
                 if (isCancelled() || shouldCancel) {
                     LOG.info("McPatch任务已被取消");
                     return;
                 }
 
-                // 创建进度回调
                 McPatchProgressCallback progressCallback = new McPatchProgressCallback(this);
 
-                // 在单独线程中执行McPatch，便于中断控制
                 CompletableFuture<Boolean> mcPatchFuture = CompletableFuture.supplyAsync(() -> {
                     mcPatchThread = Thread.currentThread();
                     try {
-                        return McPatchClient.modloaderWithProgress(true, true, progressCallback);
+                        return McPatchClient.modloaderWithProgress(true, true, progressCallback, serverUrl);
                     } catch (Exception e) {
                         if (Thread.currentThread().isInterrupted() || shouldCancel) {
                             LOG.info("McPatch执行被中断");
@@ -322,19 +323,16 @@ public final class LauncherHelper {
                     }
                 });
 
-                // 等待执行完成，定期检查取消状态
                 boolean hasUpdates = false;
                 while (!mcPatchFuture.isDone()) {
                     if (isCancelled() || shouldCancel) {
                         LOG.info("检测到取消请求，正在中断McPatch任务");
                         shouldCancel = true;
 
-                        // 中断McPatch线程
                         if (mcPatchThread != null) {
                             mcPatchThread.interrupt();
                         }
 
-                        // 等待最多3秒让任务优雅退出
                         try {
                             hasUpdates = mcPatchFuture.get(3, TimeUnit.SECONDS);
                         } catch (TimeoutException e) {
@@ -348,7 +346,7 @@ public final class LauncherHelper {
                         return;
                     }
 
-                    Thread.sleep(100); // 短暂等待
+                    Thread.sleep(100);
                 }
 
                 hasUpdates = mcPatchFuture.get();
@@ -361,7 +359,6 @@ public final class LauncherHelper {
             } catch (CancellationException | InterruptedException e) {
                 LOG.info("McPatch任务被用户取消");
                 updateMessage(i18n("mcpatch.cancelled"));
-                // 不重新抛出异常，让任务优雅结束
             } catch (Exception e) {
                 if (shouldCancel || Thread.currentThread().isInterrupted()) {
                     LOG.info("McPatch任务在取消过程中发生异常: " + e.getMessage());

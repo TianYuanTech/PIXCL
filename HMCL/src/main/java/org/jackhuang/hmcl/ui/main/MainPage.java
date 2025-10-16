@@ -349,29 +349,25 @@ public final class MainPage extends StackPane implements DecoratorPage {
     }
 
     /**
-     * @description: 检查启动器更新，如果有更新则启动更新流程并取消游戏启动
      * @return boolean - true表示发现更新并启动了更新流程，false表示无更新可以继续启动游戏
+     * @description: 检查启动器更新，如果有更新则启动更新流程并取消游戏启动
      */
     private boolean checkLauncherUpdateBeforeLaunch() {
         // 检查是否有可用的启动器更新
-        boolean hasUpdate = UpdateChecker.isOutdated();
         RemoteVersion latestVersion = UpdateChecker.getLatestVersion();
-//        RemoteVersion latestVersion = null;
+        boolean hasUpdate = UpdateChecker.isOutdated();
 
-        if (hasUpdate && latestVersion != null) {
+        if (latestVersion == null) {
+            LOG.info("检查更新失败，获取到的版本号为空");
+            Controllers.dialog("检查更新失败，请检查网络连接或联系管理员", "错误", MessageDialogPane.MessageType.ERROR);
+            return true;
+        } else if (hasUpdate) {
             LOG.info("检测到启动器更新，版本: " + latestVersion.getVersion());
-
             // 直接调用现有的更新方法
             onUpgrade();
-
             // 返回true表示启动了更新流程，需要取消游戏启动
             return true;
-        } else if (latestVersion == null){
-            LOG.info("检查更新失败，获取到的版本号为空");
-            Controllers.dialog("检查更新失败，请检查网络连接或联系管理员","错误", MessageDialogPane.MessageType.ERROR);
-            return true;
         }
-
         LOG.info("启动器已是最新版本，继续启动流程");
         return false;
     }
@@ -404,16 +400,17 @@ public final class MainPage extends StackPane implements DecoratorPage {
         }
 
         // 第二步：根据登录方式进行权限验证
-        boolean authResult = false;
-        String accountMode = "";
+        boolean authResult;
+        String accountMode;
         String liveType = null;
         String currentRoomNumber = null;
         String cardKey = null;
 
         if (i18n("auth.method.live").equals(loginMethod)) {
+            // 房间号和平台
             String platform = inputData.getPlatform();
             String roomNumber = inputData.getRoomNumber();
-
+            //
             if (StringUtils.isBlank(platform) || StringUtils.isBlank(roomNumber)) {
                 Controllers.dialog(i18n("launch.live.input.required"),
                         i18n("input.error"), MessageDialogPane.MessageType.ERROR);
@@ -470,12 +467,12 @@ public final class MainPage extends StackPane implements DecoratorPage {
 // 路径：HMCL/src/main/java/org/jackhuang/hmcl/ui/main/MainPage.java
 
     /**
-     * @description: 创建账户并启动游戏，现在支持完整的账户数据保存和合并，包含皮肤信息保留
-     * @param username 用户名
-     * @param accountMode 账户模式
-     * @param liveType 直播类型
+     * @param username          用户名
+     * @param accountMode       账户模式
+     * @param liveType          直播类型
      * @param currentRoomNumber 当前平台房间号
-     * @param cardKey 卡密
+     * @param cardKey           卡密
+     * @description: 创建账户并启动游戏，现在支持完整的账户数据保存和合并，包含皮肤信息保留
      */
     private void createAccountAndLaunch(String username, String accountMode,
                                         String liveType, String currentRoomNumber, String cardKey) {
@@ -636,9 +633,9 @@ public final class MainPage extends StackPane implements DecoratorPage {
     }
 
     /**
-     * @description: 查找现有的离线账户
      * @param username 用户名
      * @return OfflineAccount 找到的离线账户，如果不存在则返回null
+     * @description: 查找现有的离线账户
      */
     private OfflineAccount findExistingOfflineAccount(String username) {
         ObservableList<Account> allAccounts = Accounts.getAccounts();

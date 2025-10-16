@@ -45,8 +45,9 @@ class McPatchClient
             val workDir = getWorkDirectory()
             val progDir = getProgramDirectory(workDir)
 
-            // 使用硬编码配置，动态检测服务器地址
-            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir))
+            // 使用硬编码配置，服务器地址由外部传入
+            val defaultServerUrl = ""
+            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir, defaultServerUrl))
             val updateDir = getUpdateDirectory(workDir, options)
 
             // 初始化日志系统
@@ -231,24 +232,22 @@ class McPatchClient
     }
 
     /**
-     * @description: 获取硬编码配置信息，根据kokugai文件动态选择服务器
-     * @param external1 保留参数以维持方法签名兼容性（已不使用）
-     * @param workDir 工作目录，用于kokugai文件检测的参考路径
-     * @return 硬编码的配置文件对象，服务器地址根据kokugai文件动态生成
+     * @description: 获取配置信息，接收外部传入的服务器URL
+     * @param external1 外部配置文件路径（如果为null则使用硬编码配置）
+     * @param workDir 工作目录
+     * @param serverUrl 外部传入的服务器URL地址
+     * @return 包含服务器地址的配置文件对象
      */
-    fun readConfig(external1: File2?, workDir: File2): Map<String, Any>
+    fun readConfig(external1: File2?, workDir: File2, serverUrl: String): Map<String, Any>
     {
         return when {
-            // 生产环境使用生产优化配置
             Environment.IsProduction -> {
-                Log.info("使用生产环境硬编码配置，自动检测服务器地址")
-                HardcodedConfig.getProductionConfig()
+                Log.info("使用生产环境配置，服务器地址: $serverUrl")
+                HardcodedConfig.getProductionConfig(serverUrl)
             }
-
-            // 开发环境使用开发调试配置
             else -> {
-                Log.info("使用开发环境硬编码配置，自动检测服务器地址")
-                HardcodedConfig.getDevConfig()
+                Log.info("使用开发环境配置，服务器地址: $serverUrl")
+                HardcodedConfig.getDevConfig(serverUrl)
             }
         }
     }
@@ -312,43 +311,88 @@ class McPatchClient
         return if(Environment.IsProduction) Environment.JarFile!!.parent else workDir
     }
 
+    /**
+     * @description: 获取日志文件的存储路径，优先使用.minecraft\logs目录
+     * @param workDir 工作目录
+     * @param progDir 程序目录
+     * @param graphicsMode 是否为图形模式
+     * @return 日志文件的完整路径
+     */
+    fun getLogFilePath(workDir: File2, progDir: File2, graphicsMode: Boolean): File2 {
+        try {
+            val minecraftParentDir = searchDotMinecraft(workDir)
+
+            if (minecraftParentDir != null) {
+                val minecraftDir = minecraftParentDir + ".minecraft"
+                val logsDir = minecraftDir + "logs"
+                logsDir.mkdirs()
+
+                val logFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
+                val logFilePath = logsDir + logFileName
+
+                Log.debug("日志文件路径设置为: ${logFilePath.path}")
+                return logFilePath
+            }
+        } catch (e: Exception) {
+            Log.warn("无法访问.minecraft\\logs目录，使用默认日志路径: ${e.message}")
+        }
+
+        val fallbackFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
+        val fallbackPath = progDir + fallbackFileName
+        Log.debug("使用备用日志文件路径: ${fallbackPath.path}")
+        return fallbackPath
+    }
+
     companion object {
         /**
          * @description: 从ModLoader启动（带进度回调版本）
          * @param enableLogFile 是否启用日志文件
          * @param disableTheme 是否禁用主题
          * @param progressCallback 进度回调接口，用于向HMCL反馈进度信息
+         * @param serverUrl 外部传入的服务器URL地址
          * @return 是否有文件更新，如果有返回true。其它情况返回false
          */
         @JvmStatic
         fun modloaderWithProgress(
             enableLogFile: Boolean,
             disableTheme: Boolean,
-            progressCallback: ProgressCallback?
+            progressCallback: ProgressCallback?,
+            serverUrl: String
         ): Boolean {
             val result = McPatchClient().runWithProgress(
-                graphicsMode = false, // 不使用图形模式，由HMCL控制UI
+                graphicsMode = false,
                 hasStandaloneProgress = false,
                 externalConfigFile = null,
                 enableLogFile = enableLogFile,
                 disableTheme = disableTheme,
-                progressCallback = progressCallback
+                progressCallback = progressCallback,
+                serverUrl = serverUrl
             )
             Log.info("finished!")
             return result
         }
 
         /**
-         * @description: 原有的modloader方法保持兼容性
+         * @description: 向后兼容的modloader方法（不推荐使用）
+         * 保留用于其他可能的调用点，使用默认国内服务器
          */
         @JvmStatic
+        @Deprecated("使用带serverUrl参数的modloaderWithProgress方法")
         fun modloader(enableLogFile: Boolean, disableTheme: Boolean): Boolean {
-            return modloaderWithProgress(enableLogFile, disableTheme, null)
+            return modloaderWithProgress(enableLogFile, disableTheme, null, "http://api.pixellive.cn:8080")
         }
     }
 
     /**
-     * @description: 带进度回调的运行方法
+     * @description: 带进度回调和服务器URL的运行方法
+     * @param graphicsMode 是否以图形模式启动
+     * @param hasStandaloneProgress 程序是否拥有独立的进程
+     * @param externalConfigFile 可选的外部配置文件路径
+     * @param enableLogFile 是否写入日志文件
+     * @param disableTheme 是否禁用主题
+     * @param progressCallback 进度回调接口
+     * @param serverUrl 外部传入的服务器URL地址
+     * @return 是否有文件更新
      */
     fun runWithProgress(
         graphicsMode: Boolean,
@@ -356,17 +400,16 @@ class McPatchClient
         externalConfigFile: File2?,
         enableLogFile: Boolean,
         disableTheme: Boolean,
-        progressCallback: ProgressCallback?
+        progressCallback: ProgressCallback?,
+        serverUrl: String
     ): Boolean {
         try {
             val workDir = getWorkDirectory()
             val progDir = getProgramDirectory(workDir)
 
-            // 使用硬编码配置，动态检测服务器地址
-            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir))
+            val options = GlobalOptions.CreateFromMap(readConfig(externalConfigFile, workDir, serverUrl))
             val updateDir = getUpdateDirectory(workDir, options)
 
-            // 初始化日志系统
             if (enableLogFile) {
                 val logFilePath = getLogFilePath(workDir, progDir, graphicsMode)
                 Log.addHandler(FileHandler(Log, logFilePath))
@@ -380,39 +423,39 @@ class McPatchClient
             if (!hasStandaloneProgress)
                 Log.openTag("McPatchClient")
 
-            // 环境信息收集
             Log.info("RAM: " + MiscUtils.convertBytes(Runtime.getRuntime().usedMemory()))
             Log.info("Graphics Mode: $graphicsMode")
             Log.info("Standalone: $hasStandaloneProgress")
+            Log.info("使用服务器地址: $serverUrl")
 
-            // 记录服务器配置信息
-            val serverList = options.server
-            Log.info("Server Configuration: ${serverList.size} servers configured")
-            serverList.forEachIndexed { index, server ->
-                Log.info("  Server ${index + 1}: $server")
-            }
+            val jvmVersion = System.getProperty("java.version")
+            val jvmVender = System.getProperty("java.vendor")
+            val osName = System.getProperty("os.name")
+            val osArch = System.getProperty("os.arch")
+            val osVersion = System.getProperty("os.version")
+            Log.info("Updating Directory:   ${updateDir.path}")
+            Log.info("Working Directory:    ${workDir.path}")
+            Log.info("Executable Directory: ${if(Environment.IsProduction) Environment.JarFile!!.parent.path else "dev-mode"}")
+            Log.info("Application Version:  ${Environment.Version} (${Environment.GitCommit})")
+            Log.info("Java virtual Machine: $jvmVender $jvmVersion")
+            Log.info("Operating System: $osName $osVersion $osArch")
 
             Localization.init(readLangs())
 
-            // 应用主题
             if (graphicsMode && !disableTheme && !options.disableTheme)
                 SetupSwing.init()
 
-            // 使用进度回调而不是McPatchWindow
             progressCallback?.updateTitle(Localization[LangNodes.window_title])
             progressCallback?.updateLabel(Localization[LangNodes.connecting_message])
 
-            // 创建工作线程
             val workthread = WorkThreadWithCallback(progressCallback, options, updateDir, progDir)
             var exception: Throwable? = null
             workthread.isDaemon = true
             workthread.setUncaughtExceptionHandler { _, e -> exception = e }
 
-            // 启动更新任务
             workthread.start()
             workthread.join()
 
-            // 处理工作线程异常
             if (exception != null) {
                 val ex = exception!!
 
@@ -458,43 +501,5 @@ class McPatchClient
         }
 
         return false
-    }
-
-    /**
-     * @description: 获取日志文件的存储路径，优先使用.minecraft\logs目录
-     * @param workDir 工作目录
-     * @param progDir 程序目录
-     * @param graphicsMode 是否为图形模式
-     * @return 日志文件的完整路径
-     */
-    fun getLogFilePath(workDir: File2, progDir: File2, graphicsMode: Boolean): File2 {
-        try {
-            // 查找.minecraft目录
-            val minecraftParentDir = searchDotMinecraft(workDir)
-
-            if (minecraftParentDir != null) {
-                // 构建.minecraft\logs目录路径
-                val minecraftDir = minecraftParentDir + ".minecraft"
-                val logsDir = minecraftDir + "logs"
-
-                // 确保logs目录存在
-                logsDir.mkdirs()
-
-                // 返回完整的日志文件路径
-                val logFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
-                val logFilePath = logsDir + logFileName
-
-                Log.debug("日志文件路径设置为: ${logFilePath.path}")
-                return logFilePath
-            }
-        } catch (e: Exception) {
-            Log.warn("无法访问.minecraft\\logs目录，使用默认日志路径: ${e.message}")
-        }
-
-        // 如果无法找到.minecraft目录或创建logs目录失败，回退到程序目录
-        val fallbackFileName = if (graphicsMode) "mc-patch.log" else "mc-patch.log.txt"
-        val fallbackPath = progDir + fallbackFileName
-        Log.debug("使用备用日志文件路径: ${fallbackPath.path}")
-        return fallbackPath
     }
 }

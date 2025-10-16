@@ -39,10 +39,10 @@ public class AuthorizationChecker {
     private static final String TIKTOK_CONTEXT = "tiktok";
 
     /**
-     * @description: 检查直播间授权状态，根据平台自动选择合适的服务器
-     * @param platform 平台标识
+     * @param platform   平台标识
      * @param studioName 直播间名称/房间号
      * @return boolean true表示有授权，false表示无授权或请求失败
+     * @description: 检查直播间授权状态，根据平台自动选择合适的服务器
      */
     public static boolean checkWebcastAuthorization(String platform, String studioName) {
         // 参数验证
@@ -73,29 +73,21 @@ public class AuthorizationChecker {
     }
 
     /**
-     * @description: 根据平台类型选择对应的服务器URL
      * @param platform 平台名称
      * @return String 对应的服务器URL地址
+     * @description: 根据平台类型选择对应的服务器URL
      */
     private static String selectServerUrlByPlatform(String platform) {
-        if (platform == null) {
-            return Metadata.PUBLISH_URL;
-        }
-
-        // 检查是否为TikTok或Twitch平台（不区分大小写）
-        String platformLower = platform.toLowerCase();
-        if ("tiktok".equals(platformLower) || "twitch".equals(platformLower)) {
+        if ("tiktok".equalsIgnoreCase(platform) || "twitch".equalsIgnoreCase(platform)) {
             return Metadata.TIKTOK_SERVER_URL;
         }
-
-        // 默认使用官方服务器
         return Metadata.PUBLISH_URL;
     }
 
     /**
-     * @description: 检查卡密授权状态
      * @param cardKey 卡密值
      * @return boolean true表示有授权，false表示无授权或请求失败
+     * @description: 检查卡密授权状态
      */
     public static boolean checkCardAuthorization(String cardKey) {
         // 参数验证
@@ -104,35 +96,74 @@ public class AuthorizationChecker {
         }
 
         try {
-            // 构建请求URL
+            // 编码卡密参数
             String encodedCardKey = URLEncoder.encode(cardKey, StandardCharsets.UTF_8.toString());
 
-            String fullUrl = Metadata.PUBLISH_URL + "/check/card/authorization" +
-                    "?cardKey=" + encodedCardKey;
+            // 定义服务器列表，按优先级排序
+            String[] serverUrls = {
+                    Metadata.PUBLISH_URL,
+                    Metadata.TIKTOK_SERVER_URL
+            };
 
-            // 创建HTTP连接（使用POST方法）
-            HttpURLConnection conn = createConnection(fullUrl, "POST");
+            // 依次尝试每个服务器
+            for (int i = 0; i < serverUrls.length; i++) {
+                String baseUrl = serverUrls[i];
+                String fullUrl = baseUrl + "/check/card/authorization" + "?cardKey=" + encodedCardKey;
 
-            // 对于POST请求需要写入空请求体（接口要求）
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(new byte[0]); // 发送空请求体
+                try {
+                    // 创建HTTP连接
+                    HttpURLConnection conn = createConnection(fullUrl, "POST");
+
+                    // 发送空请求体
+                    try (OutputStream os = conn.getOutputStream()) {
+                        os.write(new byte[0]);
+                    }
+
+                    // 处理响应
+                    boolean result = processResponse(conn);
+
+                    // 如果验证成功，直接返回结果
+                    if (result) {
+                        if (i > 0) {
+                            // 记录使用了备用服务器
+                            System.out.println("主服务器不可用，已切换至备用服务器: " + baseUrl);
+                        }
+                        return true;
+                    }
+
+                    // 如果验证失败（非连接问题），不再尝试其他服务器
+                    return false;
+
+                } catch (Exception e) {
+                    // 当前服务器连接失败
+                    System.err.println("服务器连接失败: " + baseUrl + " - " + e.getMessage());
+
+                    // 如果这是最后一个服务器，记录错误并返回失败
+                    if (i == serverUrls.length - 1) {
+                        e.printStackTrace();
+                        return false;
+                    }
+
+                    // 否则继续尝试下一个服务器
+                    System.out.println("尝试连接备用服务器...");
+                }
             }
 
-            // 处理响应
-            return processResponse(conn);
+            return false;
+
         } catch (Exception e) {
-            // 记录错误日志
+            // 参数编码等前置操作失败
             e.printStackTrace();
             return false;
         }
     }
 
     /**
-     * @description: 创建HTTP连接并设置基本参数
-     * @param url 请求的完整URL地址
+     * @param url    请求的完整URL地址
      * @param method HTTP请求方法（GET或POST）
      * @return HttpURLConnection 配置好的HTTP连接对象
      * @throws IOException 当创建连接失败时抛出异常
+     * @description: 创建HTTP连接并设置基本参数
      */
     private static HttpURLConnection createConnection(String url, String method) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
@@ -151,10 +182,10 @@ public class AuthorizationChecker {
     }
 
     /**
-     * @description: 处理HTTP响应并解析授权结果
      * @param conn 已建立的HTTP连接对象
      * @return boolean 解析得到的授权状态
      * @throws IOException 当读取响应失败时抛出异常
+     * @description: 处理HTTP响应并解析授权结果
      */
     private static boolean processResponse(HttpURLConnection conn) throws IOException {
         int responseCode = conn.getResponseCode();
