@@ -119,10 +119,8 @@ object HardcodedConfig {
             DOMESTIC_SERVER_HOST
         }
 
-        // 生成端口范围6701-6710的服务器列表
-        return (6701..6710).map { port ->
-            "$serverHost:$port"
-        }
+        // 使用固定端口8080
+        return listOf("$serverHost:8080")
     }
 
     /**
