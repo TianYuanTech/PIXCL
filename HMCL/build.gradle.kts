@@ -16,7 +16,7 @@ val isOfficial = System.getenv("HMCL_SIGNATURE_KEY") != null
         || (System.getenv("GITHUB_REPOSITORY_OWNER") == "HMCL-dev" && System.getenv("GITHUB_BASE_REF")
     .isNullOrEmpty())
 
-val buildNumber = "0"
+val buildNumber = "1"
 val versionRoot = System.getenv("VERSION_ROOT") ?: "1.1"
 //val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "unofficial"
 val versionType = System.getenv("VERSION_TYPE") ?: "stable"
