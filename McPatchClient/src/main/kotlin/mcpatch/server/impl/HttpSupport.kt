@@ -13,6 +13,7 @@ import mcpatch.stream.ExposedByteArrayOutputStream
 import mcpatch.util.File2
 import mcpatch.util.MiscUtils
 import mcpatch.webdav.CreateIgnoreVerifySsl
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.InterruptedIOException
@@ -40,6 +41,14 @@ class HttpSupport(serverString: String, val options: GlobalOptions)
         .connectTimeout(options.httpConnectTimeout.toLong(), TimeUnit.MILLISECONDS)
         .readTimeout(options.httpResponseTimeout.toLong(), TimeUnit.MILLISECONDS)
         .writeTimeout(options.httpResponseTimeout.toLong(), TimeUnit.MILLISECONDS)
+        .connectionPool(
+            ConnectionPool(
+            maxIdleConnections = 10,
+            keepAliveDuration = 5,
+            TimeUnit.MINUTES
+        )
+        )
+        .retryOnConnectionFailure(true)
         .build()
 
     val retryTimes: Int = options.retryTimes

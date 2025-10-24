@@ -97,7 +97,7 @@ retry-times: 5
 concurrent-threads: 4
 
 # 多线程下载时每个文件块的大小
-concurrent-block-size: 4194304 # 默认为4mb
+concurrent-block-size: 41943040 # 默认为40mb
 
 # 如果客户端当前版本号在服务端的版本列表里不存在时（即版本号损坏），是否自动重头开始下载所有版本
 # true：如果客户端版本号出现问题，会从新下载一遍服务端的所有版本以达到修复文件的目的

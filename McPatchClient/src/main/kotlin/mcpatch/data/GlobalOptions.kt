@@ -134,7 +134,7 @@ data class GlobalOptions(
                 autoRestartVersion = getOption(map, "auto-restart-version") ?: true,
                 autoCloseChangelogs = getOption(map, "changelogs-auto-close") ?: 0,
                 concurrentThreads = getOption(map, "concurrent-threads") ?: 4,
-                concurrentBlockSize = getOption(map, "concurrent-block-size") ?: 4194304,
+                concurrentBlockSize = getOption(map, "concurrent-block-size") ?: 41943040,
                 versionsFileName = getOption(map, "server-versions-file-name") ?: "versions.txt",
                 ignoreHttpsCertificate = getOption(map, "ignore-https-certificate") ?: false,
                 httpFallbackFileSize = getOption(map, "http-fallback-file-size") ?: (1024L * 1024L * 1024L),
