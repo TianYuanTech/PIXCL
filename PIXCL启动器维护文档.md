@@ -1,11 +1,5 @@
 # PIXCL 直播启动器项目维护文档
 
-> **版本**: 1.0  
-> **最后更新**: 2025年12月31日  
-> **项目基于**: HMCL (Hello Minecraft! Launcher)
-
----
-
 ## 📌 第一章：重要注意事项
 
 ### 1.1 开源协议声明
@@ -1426,23 +1420,6 @@ Task.supplyAsync(Schedulers.io(), () -> {
 | config.json | `%APPDATA%/hmcl/config.json` | 全局配置 |
 | kokugai | `.hmcl/kokugai` | 海外API切换标记 |
 | PixelLiveGame.json | `游戏目录/config/` | 直播游戏配置 |
-
-### 8.5 调试技巧
-
-1. **启用详细日志**: 启动参数添加 `-Dhmcl.debug=true`
-2. **查看配置**: 检查 `.hmcl/hmcl.json` 文件
-3. **网络调试**: 使用 Fiddler 或 Charles 抓包分析API请求
-4. **UI调试**: 使用 ScenicView 工具查看JavaFX节点树
-
----
-
-## 📝 更新日志
-
-| 日期 | 版本 | 更新内容 |
-|------|------|----------|
-| 2025-12-31 | 1.0 | 初始版本，包含完整的项目结构和开发指南 |
-
----
 
 ## 🔗 相关链接
 
